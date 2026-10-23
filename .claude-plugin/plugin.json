@@ -1,6 +1,6 @@
 {
   "name": "live-sessions",
-  "version": "0.15.7",
+  "version": "0.15.8",
   "description": "A \"Live sessions\" pane for the Claude Code desktop app: every session with its state at a glance (needs you, working, done but not checked), the rest grouped by project.",
   "types": "./types/index.d.ts"
 }

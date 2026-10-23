@@ -25,7 +25,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.15.7'
+const VERSION = '0.15.8'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -418,12 +418,11 @@ export const register: Register = on => {
                           <Text color={THEME.muted}>{isOpen ? '▾' : '▸'}</Text>
                         </Button>
                       </Box>
+                      {/* Plain Text, not a Button: a Button drops its Text's colour and weight. The arrow folds. */}
                       <Box flexShrink={1} minWidth={0}>
-                        <Button key={`project-name:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                          <Text weight="semibold" color={THEME.project} wrap="truncate">
-                            {group.name}
-                          </Text>
-                        </Button>
+                        <Text weight="semibold" color={THEME.project} wrap="truncate">
+                          {group.name}
+                        </Text>
                       </Box>
                     </Box>
                     {group.path && iconButton(`new:${group.path}`, '+', () => onNewSession($, group.path))}
