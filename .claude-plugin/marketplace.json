@@ -1,5 +1,5 @@
 {
-  "name": "kamil-local-mods",
-  "owner": { "name": "mkowalczyk" },
+  "name": "i2p30m",
+  "owner": { "name": "i2p30m" },
   "plugins": [{ "name": "live-sessions", "source": "./" }]
 }

@@ -25,6 +25,7 @@ export type Row = {
   tasks: BgTask[]
   // Coarse "5 min temu" label; part of the draw signature.
   ago: string
+  agoShort: string
   // Ticking values, left out of the draw signature.
   lastActivityAt: number
   lastViewedAt: number

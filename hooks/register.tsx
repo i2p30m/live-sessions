@@ -5,10 +5,8 @@ import type { Row, RowState } from '../types'
 import {
   CLEANUP_HOURS,
   THEME,
-  agoLabel,
   GLYPHS,
   ICONS,
-  STATE_LABEL,
   drawSignature,
   hiddenByProject,
   isFactKey,
@@ -16,14 +14,14 @@ import {
   parseSession,
   parseSessions,
   staleRows,
-  tasksLabel,
   toFacts,
   toRows,
   toTasks,
 } from './rows'
+import { STRINGS, agoLabel, langOf } from './i18n'
+import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
-const TITLE = 'Sesje na żywo'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -46,6 +44,8 @@ const expandedAtom = atom({ plugin: 'live-sessions', key: 'expandedIds' } as con
 
 // Module memory: lost on reload, rebuilt by the next poll.
 let selfId: string | undefined
+// Follows Claude Code's `language` setting; English unless it says Polish.
+let lang: Lang = 'en'
 let isPolling = false
 let lastSig = ''
 let lastError: string | null = null
@@ -63,7 +63,9 @@ const debugBuffer: string[] = []
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    await $.command.register({ name: 'sesje', description: 'Otwiera panel „Sesje na żywo”' })
+    await loadLang($)
+    await $.command.register({ name: 'sesje', description: STRINGS.pl.commandDescription })
+    await $.command.register({ name: 'live-sessions', description: STRINGS.en.commandDescription })
     await loadPrefs($)
     void openUnasked($)
     $.clock.every(POLL_MS, () => void tick($))
@@ -72,12 +74,12 @@ export const register: Register = on => {
     return next(e)
   })
 
-  on('command.run', { command: 'sesje' }, async $ => {
+  on('command.run', { command: ['sesje', 'live-sessions'] }, async $ => {
     isClosedByPerson = false
-    await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS, focus: true })
+    await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS, focus: true })
     void tick($)
 
-    return { text: 'Panel „Sesje na żywo” otwarty.' }
+    return { text: STRINGS[lang].commandOpened }
   })
 
   // An open the person's prompt is behind is placed at any width (an unasked one
@@ -86,7 +88,7 @@ export const register: Register = on => {
     if (!isClosedByPerson) {
       const panes = await $.ui.panes()
       if (!panes.some(pane => pane.id === PANE && pane.isPlaced)) {
-        const opened = await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS })
+        const opened = await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS })
         trace(`open on prompt ${opened.isPlaced ? 'placed' : opened.reason}`)
       }
     }
@@ -159,14 +161,15 @@ export const register: Register = on => {
     const rows = all.filter(row => !row.isHidden)
     const stale = staleRows(all, now)
 
+    const S = STRINGS[lang]
     const isTerminal = e.surface === 'terminal'
     const tone = (state: RowState) => THEME[state]
     const count = (state: RowState) => rows.filter(row => row.state === state).length
     const pills: [RowState, string][] = [
-      ['input', `${count('input')} czeka`],
-      ['running', `${count('running')} pracuje`],
-      ['waiting', `${count('waiting')} w tle`],
-      ['unread', `${count('unread')} do sprawdzenia`],
+      ['input', S.pill.input(count('input'))],
+      ['running', S.pill.running(count('running'))],
+      ['waiting', S.pill.waiting(count('waiting'))],
+      ['unread', S.pill.unread(count('unread'))],
     ]
 
     // Icon buttons: a glyph, quiet until hovered (a Button holds text only).
@@ -182,7 +185,7 @@ export const register: Register = on => {
 
     const icon = (state: RowState) =>
       Svg ? (
-        <Svg source={ICONS[state]} alt={STATE_LABEL[state]} width={20} height={20} />
+        <Svg source={ICONS[state]} alt={S.state[state]} width={20} height={20} />
       ) : (
         <Text color={tone(state).main}>{GLYPHS[state]}</Text>
       )
@@ -210,7 +213,7 @@ export const register: Register = on => {
                 </Text>
               </Button>
               <Text size="footnote" color={THEME.sub} wrap="truncate">
-                {[row.isSelf ? 'ta sesja' : row.project, row.isWorktree && 'worktree', row.ago].filter(Boolean).join(' · ')}
+                {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
               </Text>
             </Box>
             <Box flexDirection="row" flexShrink={0} gap={0}>
@@ -224,7 +227,7 @@ export const register: Register = on => {
                 <Box paddingX={1} {...(isTerminal ? {} : { backgroundColor: t.chip })}>
                   <Button key={`tasks:${row.id}`} plain onPress={() => onToggleTasks($, row.id)}>
                     <Text size="footnote" weight="medium" color={t.text}>
-                      {isOpen ? '▾' : '▸'} {tasksLabel(row.tasks.length)}
+                      {isOpen ? '▾' : '▸'} {S.tasks(row.tasks.length)}
                     </Text>
                   </Button>
                 </Box>
@@ -251,7 +254,6 @@ export const register: Register = on => {
     }
 
     const shownOf = <T,>(list: readonly T[]) => (perProject > 0 ? list.slice(0, perProject) : list)
-    const shortAgo = (row: Row) => row.ago.replace(/ temu$/, '')
 
     // A session in its project: one quiet line, as in the sidebar.
     const drawProjectRow = (row: Row, depth: number) => (
@@ -273,7 +275,7 @@ export const register: Register = on => {
         </Box>
         <Box flexShrink={0}>
           <Text size="footnote" color={THEME.muted}>
-            {shortAgo(row)}
+            {row.agoShort}
           </Text>
         </Box>
         {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id))}
@@ -281,7 +283,7 @@ export const register: Register = on => {
     )
 
     const groups: RowState[] = ['input', 'running', 'waiting', 'unread', 'idle']
-    const projects = hiddenByProject(all)
+    const projects = hiddenByProject(all, lang)
 
     return (
       <Box flexDirection="column" gap={2} paddingX={1} paddingTop={1}>
@@ -297,16 +299,16 @@ export const register: Register = on => {
             ))}
             {pills.every(([state]) => count(state) === 0) && (
               <Text size="footnote" color={THEME.sub}>
-                Nic nie czeka na Ciebie.
+                {S.nothingWaiting}
               </Text>
             )}
           </Box>
           {PerProject && (
             <PerProject
               key="per-project"
-              label="Sesji na projekt"
+              label={S.perProject}
               value={String(perProject)}
-              options={PER_PROJECT_CHOICES.map(n => ({ value: String(n), label: n ? `${n}` : 'Wszystkie' }))}
+              options={PER_PROJECT_CHOICES.map(n => ({ value: String(n), label: n ? `${n}` : S.all }))}
               onSelect={value => onPerProject($, Number(value))}
             />
           )}
@@ -319,7 +321,7 @@ export const register: Register = on => {
             <Box key="cleanup-wrap" flexDirection="row">
               <Button key="cleanup" plain onPress={() => onHide($, stale.map(row => row.id))}>
                 <Text size="footnote" color={THEME.muted} hover={{ color: THEME.text }}>
-                  ↓ Przenieś nieaktywne &gt; {CLEANUP_HOURS} h do projektów ({stale.length})
+                  {S.cleanup(CLEANUP_HOURS, stale.length)}
                 </Text>
               </Button>
             </Box>
@@ -333,7 +335,7 @@ export const register: Register = on => {
           return (
             <Box key={`group:${state}`} flexDirection="column" gap={1}>
               <Text size="caption" weight="semibold" color={tone(state).text}>
-                {STATE_LABEL[state].toUpperCase()}
+                {S.state[state].toLocaleUpperCase(lang)}
               </Text>
               {shown.map(drawRow)}
             </Box>
@@ -343,7 +345,7 @@ export const register: Register = on => {
         {projects.length > 0 && (
           <Box flexDirection="column" gap={1}>
             <Text size="caption" weight="semibold" color={THEME.muted}>
-              PROJEKTY
+              {S.projects}
             </Text>
             {projects.map(group => {
               const isOpen = !closedProjects.includes(group.path)
@@ -357,14 +359,14 @@ export const register: Register = on => {
                     </Text>
                     <Text size="footnote" color={THEME.muted}>
                       {'  '}
-                      {agoLabel(now - group.lastActivityAt)} · {group.rows.length}
+                      {agoLabel(now - group.lastActivityAt, lang)} · {group.rows.length}
                     </Text>
                   </Button>
                   {isOpen && shownOf(group.rows).map(({ row, depth }) => drawProjectRow(row, depth))}
                   {isOpen && extra > 0 && (
                     <Box paddingLeft={3}>
                       <Text size="footnote" color={THEME.muted}>
-                        + {extra} więcej
+                        {S.more(extra)}
                       </Text>
                     </Box>
                   )}
@@ -381,7 +383,7 @@ export const register: Register = on => {
 // --- polling -------------------------------------------------------------
 
 async function openUnasked($: EngineInterface) {
-  const opened = await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS })
+  const opened = await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS })
   trace(`open at start ${opened.isPlaced ? 'placed' : opened.reason}`)
 }
 
@@ -394,13 +396,14 @@ async function tick($: EngineInterface) {
     if (panes.some(pane => pane.id === PANE && pane.isPlaced)) await poll($)
     await flushDebug($)
   } catch (err) {
-    await setError($, `Błąd odświeżania: ${String(err)}`)
+    await setError($, STRINGS[lang].refreshFailed(String(err)))
   } finally {
     isPolling = false
   }
 }
 
 async function poll($: EngineInterface) {
+  await loadLang($)
   const [listText, selfText, keys] = await Promise.all([
     callText($, 'list_sessions', { limit: LIST_LIMIT }),
     callText($, 'get_session', { session_id: 'self' }),
@@ -410,19 +413,19 @@ async function poll($: EngineInterface) {
   if (self) selfId = self.sessionId
   const factKeys = keys.filter(isFactKey)
   const values = await Promise.all(factKeys.map(key => $.store.get(key)))
-  const facts = toFacts(factKeys.map((key, i) => [key, values[i]] as const))
+  const facts = toFacts(factKeys.map((key, i) => [key, values[i]] as const), lang)
 
   const listed = parseSessions(listText)
   const sessions = [...(self ? [self] : []), ...listed]
   if (listed.length === 0) {
-    await setError($, `Nie udało się odczytać listy sesji (${listText.length} znaków): ${listText.slice(0, 160)}`)
+    await setError($, STRINGS[lang].listUnreadable(listText.length, listText.slice(0, 160)))
     return
   }
   if (sessions.length === 0) {
-    await setError($, `Nie udało się pobrać sesji: ${listText.slice(0, 200)}`)
+    await setError($, STRINGS[lang].listEmpty(listText.slice(0, 200)))
     return
   }
-  const rows = toRows(sessions, facts, selfId, await $.clock.now())
+  const rows = toRows(sessions, facts, selfId, await $.clock.now(), lang)
   for (const row of rows) activity.set(row.id, row.lastActivityAt)
   await setError($, null)
 
@@ -450,6 +453,13 @@ async function markSelfOnScreen($: EngineInterface) {
   }
 }
 
+async function loadLang($: EngineInterface) {
+  const next = langOf(await $.settings.read({ key: 'language' }).catch(() => undefined))
+  if (next === lang) return
+  lang = next
+  lastSig = ''
+}
+
 async function ensureSelf($: EngineInterface) {
   if (selfId) return selfId
   selfId = parseSession(await callText($, 'get_session', { session_id: 'self' }))?.sessionId
@@ -466,7 +476,7 @@ async function setInput($: EngineInterface, value: boolean) {
 
 async function saveTasks($: EngineInterface, tasks: unknown) {
   const id = await ensureSelf($)
-  if (id) await $.store.set(`bg:${id}`, toTasks(tasks ?? []))
+  if (id) await $.store.set(`bg:${id}`, toTasks(tasks ?? [], lang))
 }
 
 async function setError($: EngineInterface, error: string | null) {
@@ -551,7 +561,7 @@ async function onToggleProject($: EngineInterface, path: string) {
 async function grabFocus($: EngineInterface, key: string) {
   const result = await $.ui.focus({ requestId: PANE, key }).catch(err => ({ deny: String(err) }))
   trace(`grab ${key} ${result.deny ?? 'ok'}`)
-  if (result.deny) await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS, focus: true })
+  if (result.deny) await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS, focus: true })
 }
 
 // On a session switch the pane gains focus and loses it ~30 ms later to the composer;
@@ -568,7 +578,7 @@ function noteFocus($: EngineInterface, isFocused: boolean, now: number) {
 }
 
 async function refocus($: EngineInterface) {
-  await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS, focus: true })
+  await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS, focus: true })
 }
 
 // --- diagnostics (remove once single clicks are confirmed) ---------------------

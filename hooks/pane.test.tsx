@@ -61,9 +61,9 @@ test('the pane shows states; hiding only hides', async ($, on) => {
 
   for (const surface of ['desktop', 'terminal'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Text', text: /pracuje$/ }))?.text).toBe('2 pracuje')
-    expect(await ui.find({ type: 'Text', text: /^PRACUJE$/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /^SKOŃCZONE, DO SPRAWDZENIA$/ })).toBeDefined()
+    expect((await ui.find({ type: 'Text', text: /working$/ }))?.text).toBe('2 working')
+    expect(await ui.find({ type: 'Text', text: /^WORKING$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /^DONE, NOT CHECKED$/ })).toBeDefined()
     expect(await ui.find({ key: 'seen:local_me' })).toBeUndefined()
     expect(await ui.find({ key: 'hide:local_me' })).toBeUndefined()
     expect(await ui.find({ key: 'cleanup' })).toBeDefined()
@@ -114,4 +114,26 @@ test('a prompt opens the pane when an unasked open was not placed', async ($, on
   await $.prompt.submit({ text: 'hej', wait: false, origin: { kind: 'composer' } })
   expect(opens.length).toBe(2)
 
+})
+
+test('with Claude Code set to Polish the pane speaks Polish', async ($, on) => {
+  mock.clock(on, { now: NOW })
+  mock.store(on)
+  on('settings.read', () => ({ value: { language: 'polish' } }))
+  on('command.register', () => ({ value: { command: 'sesje' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.panes', () => ({
+    value: [{ id: 'live-sessions', title: 'Sesje na żywo', isShown: true, isFocused: false, isPlaced: true }],
+  }))
+  on('mcp.call', (_, e) => {
+    const text = e.tool === 'list_sessions' ? JSON.stringify(SESSIONS) : e.tool === 'get_session' ? JSON.stringify(SELF) : '{"views":[]}'
+    return { value: { content: [{ type: 'text', text }], isError: false } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  expect((await ui.find({ type: 'Text', text: /pracuje$/ }))?.text).toBe('2 pracuje')
+  expect(await ui.find({ type: 'Text', text: /^SKOŃCZONE, DO SPRAWDZENIA$/ })).toBeDefined()
+  await ui.unmount()
 })

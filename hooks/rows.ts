@@ -1,4 +1,6 @@
 import type { BgTask, Row, RowState } from '../types'
+import { STRINGS, agoLabel } from './i18n'
+import type { Lang } from './i18n'
 
 export const CLEANUP_HOURS = 5
 const HOUR = 60 * 60 * 1000
@@ -31,14 +33,6 @@ export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input'] as cons
 export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {} })
 
 const RANK: Record<RowState, number> = { input: 0, running: 1, waiting: 2, unread: 3, idle: 4 }
-
-export const STATE_LABEL: Record<RowState, string> = {
-  input: 'Czeka na Twoją odpowiedź',
-  running: 'Pracuje',
-  waiting: 'Czeka na pracę w tle',
-  unread: 'Skończone, do sprawdzenia',
-  idle: 'Pozostałe',
-}
 
 // The text of an MCP result's first JSON value (some answers lead with a line of prose).
 export function parseJson(text: string): unknown {
@@ -77,7 +71,7 @@ export function parseIsOnScreen(text: string): boolean {
 }
 
 // Store keys `<fact>:<sessionId>` and their values, into Facts.
-export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>): Facts {
+export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>, lang: Lang = 'en'): Facts {
   const facts = emptyFacts()
   for (const [key, value] of entries) {
     const at = key.indexOf(':')
@@ -86,7 +80,7 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>): Fac
     if (fact === 'input') {
       if (value === true) facts.input[id] = true
     } else if (fact === 'bg') {
-      facts.bg[id] = toTasks(value)
+      facts.bg[id] = toTasks(value, lang)
     } else if ((FACT_PREFIXES as readonly string[]).includes(fact) && typeof value === 'number') {
       facts[fact as 'seen' | 'viewed' | 'hidden'][id] = value
     }
@@ -95,9 +89,9 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>): Fac
 }
 
 // `classic.Stop`'s `background_tasks`, kept small for the store. Older versions stored a count.
-export function toTasks(value: unknown): BgTask[] {
+export function toTasks(value: unknown, lang: Lang = 'en'): BgTask[] {
   if (typeof value === 'number') {
-    return Array.from({ length: value }, (_, i) => ({ id: `n${i}`, type: '?', status: '', label: 'szczegóły po restarcie sesji' }))
+    return Array.from({ length: value }, (_, i) => ({ id: `n${i}`, type: '?', status: '', label: STRINGS[lang].detailsAfterRestart }))
   }
   if (!Array.isArray(value)) return []
   return value
@@ -110,28 +104,14 @@ export function toTasks(value: unknown): BgTask[] {
         id: typeof one.id === 'string' ? one.id : `t${i}`,
         type: typeof one.type === 'string' ? one.type : '?',
         status: typeof one.status === 'string' ? one.status : '',
-        label: (text ?? 'bez opisu').replace(/\s+/g, ' ').slice(0, 160),
+        label: (text ?? STRINGS[lang].noDescription).replace(/\s+/g, ' ').slice(0, 160),
       }
     })
-}
-
-export function tasksLabel(count: number): string {
-  const word = count === 1 ? 'zadanie' : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'zadania' : 'zadań'
-  return `${count} ${word} w tle`
 }
 
 export function isFactKey(key: string): boolean {
   const at = key.indexOf(':')
   return at > 0 && (FACT_PREFIXES as readonly string[]).includes(key.slice(0, at))
-}
-
-export function agoLabel(ms: number): string {
-  const minutes = Math.floor(ms / 60000)
-  if (minutes < 1) return 'przed chwilą'
-  if (minutes < 60) return `${minutes} min temu`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} h temu`
-  return `${Math.floor(hours / 24)} d temu`
 }
 
 const time = (iso: string | undefined) => {
@@ -150,7 +130,13 @@ export function isWorktree(session: Session): boolean {
   return Boolean(session.worktree || session.worktreePath) || /\/(\.claude\/)?worktrees\//.test(session.cwd ?? '')
 }
 
-export function toRows(sessions: readonly Session[], facts: Facts, selfId: string | undefined, now: number): Row[] {
+export function toRows(
+  sessions: readonly Session[],
+  facts: Facts,
+  selfId: string | undefined,
+  now: number,
+  lang: Lang = 'en',
+): Row[] {
   const byId = new Map<string, Session>()
   for (const one of sessions) if (!one.isArchived) byId.set(one.sessionId, one)
 
@@ -176,7 +162,7 @@ export function toRows(sessions: readonly Session[], facts: Facts, selfId: strin
 
     rows.push({
       id,
-      title: session.title || 'Bez tytułu',
+      title: session.title || STRINGS[lang].untitled,
       project: basename(projectPath(session.cwd)),
       projectPath: projectPath(session.cwd),
       ...(session.startedBy ? { parentId: session.startedBy } : {}),
@@ -186,7 +172,8 @@ export function toRows(sessions: readonly Session[], facts: Facts, selfId: strin
       isWorktree: isWorktree(session),
       isHidden,
       tasks: facts.bg[id] ?? [],
-      ago: agoLabel(now - lastActivityAt),
+      ago: agoLabel(now - lastActivityAt, lang),
+      agoShort: agoLabel(now - lastActivityAt, lang, true),
       lastActivityAt,
       lastViewedAt: facts.viewed[id] ?? 0,
     })
@@ -274,7 +261,7 @@ export type ProjectGroup = {
 
 // Hidden rows by project, the project worked on most recently first,
 // each session followed by the ones it started (like the sidebar).
-export function hiddenByProject(rows: readonly Row[]): ProjectGroup[] {
+export function hiddenByProject(rows: readonly Row[], lang: Lang = 'en'): ProjectGroup[] {
   const latest = new Map<string, number>()
   for (const row of rows) latest.set(row.projectPath, Math.max(latest.get(row.projectPath) ?? 0, row.lastActivityAt))
 
@@ -287,7 +274,7 @@ export function hiddenByProject(rows: readonly Row[]): ProjectGroup[] {
   return [...groups.entries()]
     .map(([path, inGroup]) => ({
       path,
-      name: basename(path) || 'bez projektu',
+      name: basename(path) || STRINGS[lang].noProject,
       lastActivityAt: latest.get(path) ?? 0,
       rows: nest(inGroup),
     }))

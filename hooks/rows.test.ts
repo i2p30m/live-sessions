@@ -1,7 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
-  agoLabel,
   drawSignature,
   hiddenByProject,
   projectPath,
@@ -9,12 +8,12 @@ import {
   isFactKey,
   parseIsOnScreen,
   parseSessions,
-  tasksLabel,
   toTasks,
   staleRows,
   toFacts,
   toRows,
 } from './rows'
+import { STRINGS, agoLabel, langOf } from './i18n'
 
 const NOW = Date.parse('2026-10-23T12:00:00Z')
 const at = (hoursAgo: number) => new Date(NOW - hoursAgo * 3600_000).toISOString()
@@ -121,10 +120,12 @@ test('store keys become facts; others are ignored', async () => {
 })
 
 test('ago labels are coarse', async () => {
-  expect(agoLabel(10_000)).toBe('przed chwilą')
-  expect(agoLabel(5 * 60_000)).toBe('5 min temu')
-  expect(agoLabel(3 * 3600_000)).toBe('3 h temu')
-  expect(agoLabel(50 * 3600_000)).toBe('2 d temu')
+  expect(agoLabel(10_000, 'pl')).toBe('przed chwilą')
+  expect(agoLabel(5 * 60_000, 'pl')).toBe('5 min temu')
+  expect(agoLabel(3 * 3600_000, 'pl')).toBe('3 h temu')
+  expect(agoLabel(50 * 3600_000, 'pl')).toBe('2 d temu')
+  expect(agoLabel(5 * 60_000, 'en')).toBe('5 min ago')
+  expect(agoLabel(3 * 3600_000, 'en', true)).toBe('3 h')
 })
 
 test('background tasks keep a short label; old counts still show', async () => {
@@ -135,7 +136,7 @@ test('background tasks keep a short label; old counts still show', async () => {
   const [row] = toRows([session('a')], toFacts([['bg:a', [{ id: 'x', type: 'subagent', status: 'running', description: 'Explore' }]]]), undefined, NOW)
   expect(row?.state).toBe('waiting')
   expect(row?.tasks.map(one => one.label)).toEqual(['Explore'])
-  expect([1, 3, 5, 22, 12].map(tasksLabel)).toEqual([
+  expect([1, 3, 5, 22, 12].map(STRINGS.pl.tasks)).toEqual([
     '1 zadanie w tle',
     '3 zadania w tle',
     '5 zadań w tle',
@@ -166,4 +167,10 @@ test('hidden rows group by project, most recently worked-on project first, child
   expect(groups.map(group => group.name)).toEqual(['alpha', 'beta'])
   expect(groups[0]?.rows.map(({ row, depth }) => `${row.id}:${depth}`)).toEqual(['a1:0', 'a2:1'])
   expect(projectPath('/code/alpha/.claude/worktrees/fix')).toBe('/code/alpha')
+})
+
+test('the language follows Claude Code, English unless it says Polish', async () => {
+  expect(['polish', 'Polski', 'pl', ' PL-pl'].map(langOf)).toEqual(['pl', 'pl', 'pl', 'pl'])
+  expect(['english', 'japanese', '', undefined, 3].map(langOf)).toEqual(['en', 'en', 'en', 'en', 'en'])
+  expect([1, 2].map(STRINGS.en.tasks)).toEqual(['1 background task', '2 background tasks'])
 })

@@ -1,32 +1,36 @@
-# live-sessions — „Sesje na żywo”
+# live-sessions
 
-Mod do Claude Code (zakładka Code w aplikacji desktopowej Claude): panel obok rozmowy, który pokazuje wszystkie Twoje sesje i od razu widać, w jakim są stanie.
+A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside the conversation that lists all your sessions and makes their state obvious at a glance.
 
-- **Czeka na Ciebie**: sesja zadała pytanie, czeka na akceptację planu albo na zgodę na narzędzie.
-- **Pracuje** i **Czeka na pracę w tle**, z rozwijaną listą zadań w tle (shell, subagenci).
-- **Skończone, do sprawdzenia**: sesja skończyła, a Ty jeszcze jej nie otworzyłeś (✓ oznacza jako sprawdzoną).
-- **Projekty**: pozostałe sesje pogrupowane po projektach, od ostatnio używanego, z sesjami pobocznymi pod sesją, która je uruchomiła. Liczbę sesji na projekt wybierasz na górze.
+- **Needs you**: the session asked a question, wants a plan approved, or is waiting for a tool permission.
+- **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents, monitors).
+- **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked).
+- **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane.
 
-Kliknięcie tytułu otwiera sesję. ↓ przenosi sesję z góry do jej projektu, ↑ z powrotem na górę. Nic nie jest archiwizowane ani usuwane: to tylko widok w panelu, a sesja z nową aktywnością sama wraca na górę.
+Click a title to open that session. ↓ moves a session from the top into its project, ↑ brings it back. Nothing is archived or deleted: it only changes the pane, and a session with new activity comes back to the top on its own.
 
-Panel otwiera się sam przy starcie sesji albo przy pierwszej wiadomości; `/sesje` otwiera go ponownie po zamknięciu.
+The pane opens when a session starts, or with your first message if the app did not show it then; `/live-sessions` (or `/sesje`) opens it again after you close it.
 
-## Instalacja
+## Language
 
-W terminalu, w sesji Claude Code:
+The pane follows Claude Code's `language` setting: Polish when it is set to Polish (`"language": "polish"` in `~/.claude/settings.json`), English otherwise.
+
+## Install
+
+At the prompt of a Claude Code terminal session:
 
 ```
 /plugin install live-sessions --marketplace i2p30m/live-sessions
 ```
 
-Potwierdź dodanie marketplace (`y`) i wybierz zakres użytkownika (user).
+Answer `y` to add the marketplace, then pick the user scope.
 
-Z powłoki:
+From a shell:
 
 ```
 claude plugin install live-sessions --marketplace i2p30m/live-sessions
 ```
 
-W aplikacji desktopowej, gdzie `/plugin` nie działa: kliknij + obok pola wiadomości, potem Plugins, Add marketplace z `i2p30m/live-sessions`, potem Add plugin.
+In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `i2p30m/live-sessions`, then Add plugin.
 
-Mod działa w sesjach uruchomionych po instalacji.
+The mod runs in sessions started after it is installed.
