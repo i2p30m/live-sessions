@@ -174,3 +174,11 @@ test('the language follows Claude Code, English unless it says Polish', async ()
   expect(['english', 'japanese', '', undefined, 3].map(langOf)).toEqual(['en', 'en', 'en', 'en', 'en'])
   expect([1, 2].map(STRINGS.en.tasks)).toEqual(['1 background task', '2 background tasks'])
 })
+
+test('monitors are not background work; a flag marks a session to come back to', async () => {
+  expect(toTasks([{ id: 'm', type: 'monitor', status: 'running', description: 'live updates' }])).toEqual([])
+  const [quiet] = toRows([session('a')], toFacts([['bg:a', [{ id: 'm', type: 'monitor', status: 'running' }]], ['seen:a', NOW]]), undefined, NOW)
+  expect(quiet?.state).toBe('idle')
+  const [flagged] = toRows([session('a')], toFacts([['seen:a', NOW], ['flag:a', NOW]]), undefined, NOW)
+  expect(flagged?.state).toBe('unread')
+})

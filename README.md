@@ -3,8 +3,8 @@
 A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside the conversation that lists all your sessions and makes their state obvious at a glance.
 
 - **Needs you**: the session asked a question, wants a plan approved, or is waiting for a tool permission.
-- **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents, monitors).
-- **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked).
+- **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents; monitors are left out, as in the app).
+- **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked). Click the circle of any other session to flag it to come back to: it joins this group until you open it or press ✓.
 - **Context** on each live session: a short bar and a percentage under its state icon, always in the same spot, showing how full its context window is (blue, amber from 75%, red from 90%).
 - **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane.
 

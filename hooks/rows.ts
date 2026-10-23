@@ -24,15 +24,17 @@ export type Facts = {
   seen: Record<string, number>
   // Context window fill, in percent, as each session last reported it.
   ctx: Record<string, number>
+  // Flagged by hand to come back to (when, in ms); shown as "done, not checked".
+  flag: Record<string, number>
   viewed: Record<string, number>
   hidden: Record<string, number>
   bg: Record<string, BgTask[]>
   input: Record<string, boolean>
 }
 
-export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx'] as const
+export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx', 'flag'] as const
 
-export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {}, ctx: {} })
+export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {}, ctx: {}, flag: {} })
 
 const RANK: Record<RowState, number> = { input: 0, running: 1, waiting: 2, unread: 3, idle: 4 }
 
@@ -84,20 +86,21 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>, lang
     } else if (fact === 'bg') {
       facts.bg[id] = toTasks(value, lang)
     } else if ((FACT_PREFIXES as readonly string[]).includes(fact) && typeof value === 'number') {
-      facts[fact as 'seen' | 'viewed' | 'hidden' | 'ctx'][id] = value
+      facts[fact as 'seen' | 'viewed' | 'hidden' | 'ctx' | 'flag'][id] = value
     }
   }
   return facts
 }
 
 // `classic.Stop`'s `background_tasks`, kept small for the store. Older versions stored a count.
+// Monitors (a watch on an artifact, a log tail) are left out: the app does not list them either.
 export function toTasks(value: unknown, lang: Lang = 'en'): BgTask[] {
   if (typeof value === 'number') {
     return Array.from({ length: value }, (_, i) => ({ id: `n${i}`, type: '?', status: '', label: STRINGS[lang].detailsAfterRestart }))
   }
   if (!Array.isArray(value)) return []
   return value
-    .filter((one): one is Record<string, unknown> => typeof one === 'object' && one !== null)
+    .filter((one): one is Record<string, unknown> => typeof one === 'object' && one !== null && one.type !== 'monitor')
     .map((one, i) => {
       const text = [one.label, one.description, one.command, one.name, one.agent_type].find(
         (part): part is string => typeof part === 'string' && part.trim() !== '',
@@ -158,7 +161,7 @@ export function toRows(
         ? 'running'
         : (facts.bg[id]?.length ?? 0) > 0
           ? 'waiting'
-          : !isSelf && lastActivityAt > seenAt
+          : facts.flag[id] !== undefined || (!isSelf && lastActivityAt > seenAt)
             ? 'unread'
             : 'idle'
 

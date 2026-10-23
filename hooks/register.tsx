@@ -27,6 +27,8 @@ const PANE = 'live-sessions'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
+// How long a flagged session must be on screen before its flag counts as handled.
+const FLAG_SETTLE_MS = 15_000
 const VIEWED_WRITE_MS = 60_000
 const IDLE_SHOWN = 25
 // Width of an icon button's column, in cells.
@@ -207,8 +209,17 @@ export const register: Register = on => {
       </Box>
     )
 
-    const icon = (state: RowState) =>
-      Svg ? (
+    // The state icon; an idle session's circle is a button that flags it to come back to.
+    const icon = (state: RowState, id: string) =>
+      state === 'idle' ? (
+        <Box key={`flag-wrap:${id}`} hover={{ backgroundColor: THEME.hover }}>
+          <Button key={`flag:${id}`} plain onPress={() => onFlag($, id)}>
+            <Text color={THEME.muted} hover={{ color: THEME.unread.main }} weight="semibold">
+              {GLYPHS.idle}
+            </Text>
+          </Button>
+        </Box>
+      ) : Svg ? (
         <Svg source={ICONS[state]} alt={S.state[state]} width={20} height={20} />
       ) : (
         <Text color={tone(state).main}>{GLYPHS[state]}</Text>
@@ -232,7 +243,7 @@ export const register: Register = on => {
             {/* A fixed column: the state icon, and under it how full the context is,
                 so the context sits in the same place on every card. */}
             <Box flexDirection="column" alignItems="center" gap={0} flexShrink={0} width={STATE_COLUMNS}>
-              {icon(row.state)}
+              {icon(row.state, row.id)}
               {row.contextPercent !== undefined && (
                 <Box flexDirection="column" alignItems="center" gap={0}>
                   {Svg && <Svg source={contextBar(row.contextPercent)} alt={S.context(row.contextPercent)} width={26} height={3} />}
@@ -267,7 +278,9 @@ export const register: Register = on => {
           {row.tasks.length > 0 && (
             <Box flexDirection="column" gap={0} paddingLeft={4}>
               <Box flexDirection="row">
-                <Box paddingX={1} {...(isTerminal ? {} : { backgroundColor: t.chip })}>
+                <Box flexDirection="row" alignItems="center" gap={1} paddingX={1} {...(isTerminal ? {} : { backgroundColor: t.chip })}>
+                  {/* The same hourglass as the "waiting on background work" state. */}
+                  {Svg && <Svg source={ICONS.waiting} alt="" width={14} height={14} />}
                   <Button key={`tasks:${row.id}`} plain onPress={() => onToggleTasks($, row.id)}>
                     <Text size="footnote" weight="medium" color={t.text}>
                       {isOpen ? '▾' : '▸'} {S.tasks(row.tasks.length)}
@@ -506,6 +519,9 @@ async function markSelfOnScreen($: EngineInterface) {
   const layout = await $.mcp.call('ccd_view', 'get_layout', {})
   if (!parseIsOnScreen(textOf(layout.content))) return
   const now = await $.clock.now()
+  // Back in a session flagged to come back to: once it has been on screen a while, the flag is done.
+  const flaggedAt = await $.store.get(`flag:${id}`)
+  if (typeof flaggedAt === 'number' && now - flaggedAt > FLAG_SETTLE_MS) await $.store.delete(`flag:${id}`)
   if (now - lastSeenWrite >= SEEN_WRITE_MS) {
     lastSeenWrite = now
     await $.store.set(`seen:${id}`, now)
@@ -579,6 +595,16 @@ async function markSeen($: EngineInterface, id: string) {
     rows.map(row => (row.id === id && row.state === 'unread' ? { ...row, state: 'idle' as const } : row)),
   )
   await $.store.set(`seen:${id}`, at)
+  await $.store.delete(`flag:${id}`)
+}
+
+// Flags a session to come back to: it shows as "done, not checked" until opened or ✓.
+async function onFlag($: EngineInterface, id: string) {
+  trace(`press flag ${id}`)
+  await update($, rowsAtom, rows => rows.map(row => (row.id === id ? { ...row, state: 'unread' as const } : row)))
+  await $.store.set(`flag:${id}`, await $.clock.now())
+  lastSig = ''
+  await grabFocus($, `open:${id}`)
 }
 
 // Hidden from this pane only (`hidden:<id>` = its last activity); new activity brings it back.
