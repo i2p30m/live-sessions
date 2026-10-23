@@ -23,6 +23,7 @@ export type Strings = {
   projects: string
   more: (n: number) => string
   thisSession: string
+  credit: (version: string) => string
   context: (percent: number) => string
   worktree: string
   justNow: string
@@ -62,6 +63,7 @@ export const STRINGS: Record<Lang, Strings> = {
     projects: 'PROJECTS',
     more: n => `+ ${n} more`,
     thisSession: 'this session',
+    credit: version => `created by i2p30m · version ${version}`,
     context: percent => `Context ${percent}% used`,
     worktree: 'worktree',
     justNow: 'just now',
@@ -99,6 +101,7 @@ export const STRINGS: Record<Lang, Strings> = {
     projects: 'PROJEKTY',
     more: n => `+ ${n} więcej`,
     thisSession: 'ta sesja',
+    credit: version => `stworzone przez i2p30m · wersja ${version}`,
     context: percent => `Kontekst: ${percent}% zajęte`,
     worktree: 'worktree',
     justNow: 'przed chwilą',

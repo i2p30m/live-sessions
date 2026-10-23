@@ -24,6 +24,8 @@ import { STRINGS, langOf } from './i18n'
 import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
+// Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
+const VERSION = '0.15.6'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -439,6 +441,11 @@ export const register: Register = on => {
             })}
           </Box>
         )}
+        <Box paddingBottom={1}>
+          <Text size="footnote" color={THEME.faint}>
+            {S.credit(VERSION)}
+          </Text>
+        </Box>
       </Box>
     )
   })
