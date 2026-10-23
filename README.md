@@ -11,6 +11,8 @@ Click a title to open that session. ↓ moves a session from the top into its pr
 
 The pane opens when a session starts, or with your first message if the app did not show it then; `/live-sessions` (or `/sesje`) opens it again after you close it.
 
+The pane's settings are shared by every session: the width you drag it to, the projects you fold and the number of sessions per project. The app itself decides which side the pane docks on and whether it pops out; the mod cannot set those.
+
 ## Language
 
 The pane follows Claude Code's `language` setting: Polish when it is set to Polish (`"language": "polish"` in `~/.claude/settings.json`), English otherwise.

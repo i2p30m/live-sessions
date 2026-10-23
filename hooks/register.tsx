@@ -29,8 +29,10 @@ const VIEWED_WRITE_MS = 60_000
 const IDLE_SHOWN = 25
 // Larger answers (~80 KB at 200) reach the mod cut short.
 const LIST_LIMIT = 80
-// Docked width asked for; the person's own drag wins.
+// Docked width asked for until the person sets their own; then theirs, shared by every session.
 const COLUMNS = 48
+const COLUMNS_KEY = 'pref:columns'
+const CLOSED_PROJECTS_KEY = 'pref:closedProjects'
 const DEBUG = false
 
 const rowsAtom = atom({ plugin: 'live-sessions', key: 'rows' } as const, [] as Row[])
@@ -54,6 +56,10 @@ let lastViewedWrite = 0
 let isAwaitingPermission = false
 // Set when the person closes the pane; /sesje clears it.
 let isClosedByPerson = false
+// The dock width to ask for, and what this session's pane last measured (see `noteWidth`).
+let wantedColumns = COLUMNS
+let seenColumns = 0
+let widthTimer: { cancel: () => void } | undefined
 const activity = new Map<string, number>()
 // Focus bookkeeping (see `noteFocus`).
 let wasFocused = false
@@ -76,7 +82,7 @@ export const register: Register = on => {
 
   on('command.run', { command: ['sesje', 'live-sessions'] }, async $ => {
     isClosedByPerson = false
-    await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS, focus: true })
+    await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: wantedColumns, focus: true })
     void tick($)
 
     return { text: STRINGS[lang].commandOpened }
@@ -88,7 +94,7 @@ export const register: Register = on => {
     if (!isClosedByPerson) {
       const panes = await $.ui.panes()
       if (!panes.some(pane => pane.id === PANE && pane.isPlaced)) {
-        const opened = await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS })
+        const opened = await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: wantedColumns })
         trace(`open on prompt ${opened.isPlaced ? 'placed' : opened.reason}`)
       }
     }
@@ -152,6 +158,7 @@ export const register: Register = on => {
     const Svg = e.surface === 'terminal' ? undefined : $.ui.resolve(e).Svg
     const now = await $.clock.now()
     noteFocus($, e.props.isFocused, now)
+    noteWidth($, e.props.placement, e.props.bodyColumns)
 
     const all = await read($, rowsAtom)
     const error = await read($, errorAtom)
@@ -383,7 +390,7 @@ export const register: Register = on => {
 // --- polling -------------------------------------------------------------
 
 async function openUnasked($: EngineInterface) {
-  const opened = await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS })
+  const opened = await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: wantedColumns })
   trace(`open at start ${opened.isPlaced ? 'placed' : opened.reason}`)
 }
 
@@ -403,7 +410,7 @@ async function tick($: EngineInterface) {
 }
 
 async function poll($: EngineInterface) {
-  await loadLang($)
+  await Promise.all([loadLang($), loadPrefs($)])
   const [listText, selfText, keys] = await Promise.all([
     callText($, 'list_sessions', { limit: LIST_LIMIT }),
     callText($, 'get_session', { session_id: 'self' }),
@@ -545,14 +552,45 @@ async function onPerProject($: EngineInterface, count: number) {
   await $.store.set(PER_PROJECT_KEY, count)
 }
 
+// Pane settings live in the store, so every session shows the pane the same way.
 async function loadPrefs($: EngineInterface) {
-  const count = await $.store.get(PER_PROJECT_KEY)
-  if (typeof count === 'number' && PER_PROJECT_CHOICES.includes(count)) await update($, perProjectAtom, () => count)
+  const [count, closed, columns] = await Promise.all([
+    $.store.get(PER_PROJECT_KEY),
+    $.store.get(CLOSED_PROJECTS_KEY),
+    $.store.get(COLUMNS_KEY),
+  ])
+  if (typeof count === 'number' && PER_PROJECT_CHOICES.includes(count) && count !== (await read($, perProjectAtom))) {
+    await update($, perProjectAtom, () => count)
+  }
+  if (Array.isArray(closed)) {
+    const paths = closed.filter((one): one is string => typeof one === 'string')
+    if (JSON.stringify(paths) !== JSON.stringify(await read($, closedProjectsAtom))) await update($, closedProjectsAtom, () => paths)
+  }
+  if (typeof columns === 'number' && columns >= 24 && columns <= 400) wantedColumns = columns
 }
 
 async function onToggleProject($: EngineInterface, path: string) {
-  await update($, closedProjectsAtom, paths => (paths.includes(path) ? paths.filter(one => one !== path) : [...paths, path]))
+  const paths = await update($, closedProjectsAtom, paths =>
+    paths.includes(path) ? paths.filter(one => one !== path) : [...paths, path],
+  )
+  await $.store.set(CLOSED_PROJECTS_KEY, paths)
   await grabFocus($, `project:${path}`)
+}
+
+// A docked pane whose width changes while open was resized by the person: keep that width
+// for every session once it settles. The first width a pane reports is the app's, not theirs.
+function noteWidth($: EngineInterface, placement: 'dock' | 'inline', columns: number) {
+  if (placement !== 'dock' || columns <= 0 || columns === seenColumns) return
+  const isFirst = seenColumns === 0
+  seenColumns = columns
+  if (isFirst || columns === wantedColumns) return
+  widthTimer?.cancel()
+  widthTimer = $.clock.after(1500, () => void saveWidth($, columns))
+}
+
+async function saveWidth($: EngineInterface, columns: number) {
+  wantedColumns = columns
+  await $.store.set(COLUMNS_KEY, columns)
 }
 
 // --- focus -----------------------------------------------------------------
@@ -561,7 +599,7 @@ async function onToggleProject($: EngineInterface, path: string) {
 async function grabFocus($: EngineInterface, key: string) {
   const result = await $.ui.focus({ requestId: PANE, key }).catch(err => ({ deny: String(err) }))
   trace(`grab ${key} ${result.deny ?? 'ok'}`)
-  if (result.deny) await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS, focus: true })
+  if (result.deny) await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: wantedColumns, focus: true })
 }
 
 // On a session switch the pane gains focus and loses it ~30 ms later to the composer;
@@ -578,7 +616,7 @@ function noteFocus($: EngineInterface, isFocused: boolean, now: number) {
 }
 
 async function refocus($: EngineInterface) {
-  await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: COLUMNS, focus: true })
+  await $.ui.open({ id: PANE, title: STRINGS[lang].title, columns: wantedColumns, focus: true })
 }
 
 // --- diagnostics (remove once single clicks are confirmed) ---------------------

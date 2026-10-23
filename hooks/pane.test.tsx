@@ -25,7 +25,7 @@ const SESSIONS = [
 const SELF = { sessionId: 'local_me', title: 'Ta', cwd: '/code/me', isRunning: true, lastActivityAt: at(0) }
 
 test('the pane shows states; hiding only hides', async ($, on) => {
-  mock.clock(on, { now: NOW })
+  const clock = mock.clock(on, { now: NOW })
   // The store, in memory, with a record of every write.
   const store = new Map<string, unknown>([
     ['seen:local_old', NOW - 9 * 3600_000],
@@ -70,6 +70,12 @@ test('the pane shows states; hiding only hides', async ($, on) => {
     await ui.unmount()
   }
 
+  // The app's first width is not the person's; a later change, once it settles, is kept.
+  const wide = await $.ui.mount({ ...PANE, surface: 'desktop', props: { ...PANE.props, bodyColumns: 72 } })
+  await wide.unmount()
+  await clock.advance(2000)
+  expect(writes).toContain('set pref:columns=72')
+
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
   // Icon buttons draw their glyph, not a label.
   expect((await ui.find({ key: 'hide:local_new' }))?.text).toBe('↓')
@@ -85,6 +91,8 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(await ui.find({ key: 'unhide:local_new' })).toBeDefined()
   await ui.press({ key: 'project:/code/app' })
   expect(await ui.find({ key: 'unhide:local_new' })).toBeUndefined()
+  // Folding is shared by every session through the store.
+  expect(writes).toContain('set pref:closedProjects=/code/app')
   await ui.press({ key: 'project:/code/app' })
   expect(await ui.find({ key: 'unhide:local_new' })).toBeDefined()
   await ui.press({ key: 'unhide:local_new' })
