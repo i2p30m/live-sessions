@@ -416,17 +416,10 @@ export const register: Register = on => {
                           <Text color={THEME.muted}>{isOpen ? '▾' : '▸'}</Text>
                         </Button>
                       </Box>
-                      <Box
-                        flexShrink={1}
-                        minWidth={0}
-                        paddingX={1}
-                        borderStyle="round"
-                        borderColor={isTerminal ? THEME.idle.main : THEME.idle.border}
-                        {...(isTerminal ? {} : { backgroundColor: THEME.idle.chip })}
-                      >
+                      <Box flexShrink={1} minWidth={0}>
                         <Button key={`project-name:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                          <Text color={THEME.strong} wrap="truncate">
-                            {group.name}
+                          <Text weight="semibold" color={THEME.strong} wrap="truncate">
+                            {group.name.toLocaleUpperCase(lang)}
                           </Text>
                         </Button>
                       </Box>
