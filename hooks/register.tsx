@@ -324,7 +324,7 @@ export const register: Register = on => {
         {depth > 0 && <Text color={THEME.faint}>└</Text>}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Button key={`open:${row.id}`} plain onPress={() => onOpen($, row.id, row.link)}>
-            <Text color={depth > 0 ? THEME.muted : THEME.sub} wrap="truncate">
+            <Text size="footnote" color={depth > 0 ? THEME.muted : THEME.sub} wrap="truncate">
               {row.title}
             </Text>
           </Button>
@@ -418,7 +418,7 @@ export const register: Register = on => {
                       </Box>
                       <Box flexShrink={1} minWidth={0}>
                         <Button key={`project-name:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                          <Text weight="semibold" color={THEME.project} wrap="truncate">
+                          <Text weight="semibold" color={THEME.strong} wrap="truncate">
                             {group.name}
                           </Text>
                         </Button>
