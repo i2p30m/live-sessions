@@ -419,7 +419,6 @@ export const register: Register = on => {
                       <Box
                         flexShrink={1}
                         minWidth={0}
-                        paddingX={1}
                         borderStyle="round"
                         borderColor={isTerminal ? THEME.idle.main : THEME.idle.border}
                         {...(isTerminal ? {} : { backgroundColor: THEME.idle.chip })}
