@@ -31,7 +31,6 @@ export type Strings = {
   tasks: (n: number) => string
   untitled: string
   noDescription: string
-  detailsAfterRestart: string
   noProject: string
   refreshFailed: (error: string) => string
   listUnreadable: (length: number, text: string) => string
@@ -71,7 +70,6 @@ export const STRINGS: Record<Lang, Strings> = {
     tasks: n => `${n} background ${n === 1 ? 'task' : 'tasks'}`,
     untitled: 'Untitled',
     noDescription: 'no description',
-    detailsAfterRestart: 'details after the session restarts',
     noProject: 'no project',
     refreshFailed: error => `Refresh failed: ${error}`,
     listUnreadable: (length, text) => `Could not read the session list (${length} characters): ${text}`,
@@ -109,7 +107,6 @@ export const STRINGS: Record<Lang, Strings> = {
     tasks: n => `${n} ${plural(n, 'zadanie', 'zadania', 'zadań')} w tle`,
     untitled: 'Bez tytułu',
     noDescription: 'bez opisu',
-    detailsAfterRestart: 'szczegóły po restarcie sesji',
     noProject: 'bez projektu',
     refreshFailed: error => `Błąd odświeżania: ${error}`,
     listUnreadable: (length, text) => `Nie udało się odczytać listy sesji (${length} znaków): ${text}`,

@@ -31,7 +31,7 @@ const session = (id: string, extra: Record<string, unknown> = {}) => ({
 test('states are ordered input, running, waiting, unread, idle', async () => {
   const facts = toFacts([
     ['input:a', true],
-    ['bg:c', 2],
+    ['bg:c', [{ id: 'b1', type: 'shell', status: 'running', command: 'npm run dev' }]],
     ['seen:e', NOW],
   ])
   const rows = toRows(
@@ -128,10 +128,10 @@ test('ago labels are coarse', async () => {
   expect(agoLabel(3 * 3600_000, 'en', true)).toBe('3 h')
 })
 
-test('background tasks keep a short label; old counts still show', async () => {
+test('background tasks keep a short label; old bare counts read as none', async () => {
   const [task] = toTasks([{ id: 'b1', type: 'shell', status: 'running', description: '', command: 'npm   run dev' }])
   expect(task).toEqual({ id: 'b1', type: 'shell', status: 'running', label: 'npm run dev' })
-  expect(toTasks(2).length).toBe(2)
+  expect(toTasks(2)).toEqual([])
   expect(toTasks('junk')).toEqual([])
   const [row] = toRows([session('a')], toFacts([['bg:a', [{ id: 'x', type: 'subagent', status: 'running', description: 'Explore' }]]]), undefined, NOW)
   expect(row?.state).toBe('waiting')

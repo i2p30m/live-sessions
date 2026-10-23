@@ -92,12 +92,10 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>, lang
   return facts
 }
 
-// `classic.Stop`'s `background_tasks`, kept small for the store. Older versions stored a count.
+// `classic.Stop`'s `background_tasks`, kept small for the store. Older versions stored a bare count,
+// monitors included; it says nothing, so it reads as none until the session's next stop.
 // Monitors (a watch on an artifact, a log tail) are left out: the app does not list them either.
 export function toTasks(value: unknown, lang: Lang = 'en'): BgTask[] {
-  if (typeof value === 'number') {
-    return Array.from({ length: value }, (_, i) => ({ id: `n${i}`, type: '?', status: '', label: STRINGS[lang].detailsAfterRestart }))
-  }
   if (!Array.isArray(value)) return []
   return value
     .filter((one): one is Record<string, unknown> => typeof one === 'object' && one !== null && one.type !== 'monitor')
