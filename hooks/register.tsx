@@ -5,6 +5,7 @@ import type { Row, RowState } from '../types'
 import {
   CLEANUP_HOURS,
   THEME,
+  contextRing,
   GLYPHS,
   ICONS,
   drawSignature,
@@ -53,6 +54,7 @@ let lastSig = ''
 let lastError: string | null = null
 let lastSeenWrite = 0
 let lastViewedWrite = 0
+let lastContextPercent: number | undefined
 let isAwaitingPermission = false
 // Set when the person closes the pane; /sesje clears it.
 let isClosedByPerson = false
@@ -223,7 +225,17 @@ export const register: Register = on => {
                 {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
               </Text>
             </Box>
-            <Box flexDirection="row" flexShrink={0} gap={0}>
+            <Box flexDirection="row" flexShrink={0} gap={0} alignItems="center">
+              {row.contextPercent !== undefined &&
+                (Svg ? (
+                  <Box flexShrink={0} paddingX={1}>
+                    <Svg source={contextRing(row.contextPercent)} alt={S.context(row.contextPercent)} width={18} height={18} />
+                  </Box>
+                ) : (
+                  <Text size="footnote" color={THEME.muted}>
+                    {row.contextPercent}%
+                  </Text>
+                ))}
               {row.state === 'unread' && iconButton(`seen:${row.id}`, '✓', () => onSeen($, row.id))}
               {!row.isSelf && iconButton(`hide:${row.id}`, '↓', () => onHide($, [row.id]))}
             </Box>
@@ -398,7 +410,8 @@ async function tick($: EngineInterface) {
   if (isPolling) return
   isPolling = true
   try {
-    await markSelfOnScreen($)
+    // The context figure is a nicety: never let it stop a refresh.
+    await Promise.all([markSelfOnScreen($), reportContext($).catch(() => undefined)])
     const panes = await $.ui.panes()
     if (panes.some(pane => pane.id === PANE && pane.isPlaced)) await poll($)
     await flushDebug($)
@@ -444,6 +457,18 @@ async function poll($: EngineInterface) {
 }
 
 // While this session is on screen, everything up to now counts as seen.
+// Every session reports its own context fill; the pane draws everyone's.
+async function reportContext($: EngineInterface) {
+  const id = await ensureSelf($)
+  if (!id) return
+  const percent = (await $.session.usage()).context.percent
+  if (typeof percent !== 'number') return
+  const rounded = Math.round(percent)
+  if (rounded === lastContextPercent) return
+  lastContextPercent = rounded
+  await $.store.set(`ctx:${id}`, rounded)
+}
+
 async function markSelfOnScreen($: EngineInterface) {
   const id = await ensureSelf($)
   if (!id) return

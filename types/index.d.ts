@@ -29,6 +29,8 @@ export type Row = {
   // Ticking values, left out of the draw signature.
   lastActivityAt: number
   lastViewedAt: number
+  // Context window fill in percent, when the session has reported it.
+  contextPercent?: number
 }
 
 declare module 'claude-code' {

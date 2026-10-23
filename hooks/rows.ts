@@ -22,15 +22,17 @@ export type Session = {
 // What the shared store says about each session, read once per poll.
 export type Facts = {
   seen: Record<string, number>
+  // Context window fill, in percent, as each session last reported it.
+  ctx: Record<string, number>
   viewed: Record<string, number>
   hidden: Record<string, number>
   bg: Record<string, BgTask[]>
   input: Record<string, boolean>
 }
 
-export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input'] as const
+export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx'] as const
 
-export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {} })
+export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {}, ctx: {} })
 
 const RANK: Record<RowState, number> = { input: 0, running: 1, waiting: 2, unread: 3, idle: 4 }
 
@@ -82,7 +84,7 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>, lang
     } else if (fact === 'bg') {
       facts.bg[id] = toTasks(value, lang)
     } else if ((FACT_PREFIXES as readonly string[]).includes(fact) && typeof value === 'number') {
-      facts[fact as 'seen' | 'viewed' | 'hidden'][id] = value
+      facts[fact as 'seen' | 'viewed' | 'hidden' | 'ctx'][id] = value
     }
   }
   return facts
@@ -176,6 +178,7 @@ export function toRows(
       agoShort: agoLabel(now - lastActivityAt, lang, true),
       lastActivityAt,
       lastViewedAt: facts.viewed[id] ?? 0,
+      ...(facts.ctx[id] !== undefined ? { contextPercent: facts.ctx[id] } : {}),
     })
   }
 
@@ -300,3 +303,17 @@ function nest(rows: readonly Row[]): { row: Row; depth: number }[] {
 }
 
 const byRecency = (rows: readonly Row[]) => [...rows].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
+
+// A context ring like Claude Code's: a gray track and an arc for the share used.
+export function contextRing(percent: number): string {
+  const r = 7
+  const length = 2 * Math.PI * r
+  const used = (Math.min(100, Math.max(0, percent)) / 100) * length
+  const color = percent >= 90 ? '#f0643c' : percent >= 75 ? '#f5b041' : '#4c8dff'
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">` +
+    `<circle cx="10" cy="10" r="${r}" fill="none" stroke="#5f5c56" stroke-opacity="0.55" stroke-width="2.5"/>` +
+    `<circle cx="10" cy="10" r="${r}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" ` +
+    `stroke-dasharray="${used.toFixed(2)} ${length.toFixed(2)}" transform="rotate(-90 10 10)"/></svg>`
+  )
+}

@@ -30,6 +30,7 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   const store = new Map<string, unknown>([
     ['seen:local_old', NOW - 9 * 3600_000],
     ['bg:local_run', [{ id: 'b1', type: 'shell', status: 'running', description: 'npm run dev' }]],
+    ['ctx:local_run', 42],
   ])
   const writes: string[] = []
   on('store.get', (_, e) => ({ value: store.get(e.key) }))
@@ -77,6 +78,9 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(writes).toContain('set pref:columns=72')
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
+  // A live session that reported its context fill shows it as a ring.
+  const alts = (await ui.findAll({ type: 'Svg' })).map(svg => (svg.props as { alt?: string }).alt)
+  expect(alts).toContain('Context 42% used')
   // Icon buttons draw their glyph, not a label.
   expect((await ui.find({ key: 'hide:local_new' }))?.text).toBe('↓')
   await ui.select({ key: 'per-project', value: '0' })
