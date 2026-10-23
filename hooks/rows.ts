@@ -211,8 +211,6 @@ export const THEME: Record<RowState, Tone> & {
   muted: string
   faint: string
   hover: string
-  chip: string
-  chipHover: string
   line: string
 } = {
   input: { main: '#f0643c', text: '#ff9a7a', tint: '#f0643c17', border: '#f0643c8c', chip: '#f0643c24' },
@@ -226,9 +224,6 @@ export const THEME: Record<RowState, Tone> & {
   muted: '#8a8780',
   faint: '#5f5c56',
   hover: '#ffffff0f',
-  // Action buttons: a quiet chip that brightens on hover.
-  chip: '#2c2a28',
-  chipHover: '#3a3835',
   line: '#2c2a28',
 }
 

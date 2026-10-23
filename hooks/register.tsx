@@ -29,6 +29,11 @@ const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
 const VIEWED_WRITE_MS = 60_000
 const IDLE_SHOWN = 25
+// Width of an icon button's column, in cells.
+const ICON_COLUMNS = 3
+// The fold arrow's column in a project header; the project's sessions are indented by it,
+// so the project name and the session titles start at the same edge.
+const FOLD_COLUMNS = 2
 // Larger answers (~80 KB at 200) reach the mod cut short.
 const LIST_LIMIT = 80
 // Docked width asked for until the person sets their own; then theirs, shared by every session.
@@ -182,18 +187,18 @@ export const register: Register = on => {
       ['unread', S.pill.unread(count('unread'))],
     ]
 
-    // Icon buttons: a glyph, quiet until hovered (a Button holds text only).
-    // Icon buttons: a glyph on a quiet chip (a Button holds text only). `quiet` drops the chip.
-    const iconButton = (key: string, glyph: string, onPress: () => void, color: string = THEME.text, quiet = false) => (
+    // Icon buttons: a glyph in a fixed-width column (so + and ↑ line up), lit only on hover;
+    // a Button holds text only.
+    const iconButton = (key: string, glyph: string, onPress: () => void, color: string = THEME.muted) => (
       <Box
         key={`wrap:${key}`}
         flexShrink={0}
-        paddingX={1}
-        {...(isTerminal || quiet ? {} : { backgroundColor: THEME.chip })}
-        hover={{ backgroundColor: isTerminal ? THEME.hover : THEME.chipHover }}
+        width={ICON_COLUMNS}
+        justifyContent="center"
+        hover={{ backgroundColor: THEME.hover }}
       >
         <Button key={key} plain onPress={onPress}>
-          <Text color={quiet ? THEME.muted : color} hover={{ color: THEME.strong }} weight="semibold">
+          <Text color={color} hover={{ color: THEME.strong }} weight="semibold">
             {glyph}
           </Text>
         </Button>
@@ -295,7 +300,7 @@ export const register: Register = on => {
         flexDirection="row"
         alignItems="center"
         gap={1}
-        paddingLeft={3 + depth * 2}
+        paddingLeft={FOLD_COLUMNS + depth * 2}
         hover={{ backgroundColor: THEME.hover }}
       >
         {depth > 0 && <Text color={THEME.faint}>└</Text>}
@@ -311,7 +316,7 @@ export const register: Register = on => {
             {row.agoShort}
           </Text>
         </Box>
-        {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id), THEME.muted, true)}
+        {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id))}
       </Box>
     )
 
@@ -386,19 +391,25 @@ export const register: Register = on => {
               return (
                 <Box key={`project:${group.path}`} flexDirection="column" gap={0}>
                   <Box flexDirection="row" alignItems="center" gap={1}>
-                    <Box flexGrow={1} flexShrink={1} minWidth={0}>
-                      <Button key={`project:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                        <Text color={THEME.muted}>{isOpen ? '▾ ' : '▸ '}</Text>
-                        <Text weight="semibold" color={THEME.text} wrap="truncate">
-                          {group.name}
-                        </Text>
-                      </Button>
+                    <Box flexDirection="row" alignItems="center" flexGrow={1} flexShrink={1} minWidth={0}>
+                      <Box flexShrink={0} width={FOLD_COLUMNS}>
+                        <Button key={`project:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
+                          <Text color={THEME.muted}>{isOpen ? '▾' : '▸'}</Text>
+                        </Button>
+                      </Box>
+                      <Box flexShrink={1} minWidth={0}>
+                        <Button key={`project-name:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
+                          <Text weight="semibold" color={THEME.text} wrap="truncate">
+                            {group.name}
+                          </Text>
+                        </Button>
+                      </Box>
                     </Box>
-                    {group.path && iconButton(`new:${group.path}`, '+', () => onNewSession($, group.path), THEME.muted, true)}
+                    {group.path && iconButton(`new:${group.path}`, '+', () => onNewSession($, group.path))}
                   </Box>
                   {isOpen && shownOf(group.rows).map(({ row, depth }) => drawProjectRow(row, depth))}
                   {isOpen && extra > 0 && (
-                    <Box paddingLeft={3}>
+                    <Box paddingLeft={FOLD_COLUMNS + 1}>
                       <Text size="footnote" color={THEME.muted}>
                         {S.more(extra)}
                       </Text>
