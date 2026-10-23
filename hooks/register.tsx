@@ -359,16 +359,27 @@ export const register: Register = on => {
               const extra = perProject > 0 ? group.rows.length - perProject : 0
               return (
                 <Box key={`project:${group.path}`} flexDirection="column" gap={0}>
-                  <Button key={`project:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                    <Text color={THEME.muted}>{isOpen ? '▾ ' : '▸ '}</Text>
-                    <Text weight="semibold" color={THEME.text}>
-                      {group.name}
-                    </Text>
-                    <Text size="footnote" color={THEME.muted}>
-                      {'  '}
-                      {agoLabel(now - group.lastActivityAt, lang)} · {group.rows.length}
-                    </Text>
-                  </Button>
+                  {/* Name on the left, time on the right, lined up with the rows' times. */}
+                  <Box flexDirection="row" alignItems="center" gap={1}>
+                    <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                      <Button key={`project:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
+                        <Text color={THEME.muted}>{isOpen ? '▾ ' : '▸ '}</Text>
+                        <Text weight="semibold" color={THEME.text} wrap="truncate">
+                          {group.name}
+                        </Text>
+                      </Button>
+                    </Box>
+                    <Box flexShrink={0}>
+                      <Text size="footnote" color={THEME.muted}>
+                        {agoLabel(now - group.lastActivityAt, lang, true)}
+                      </Text>
+                    </Box>
+                    <Box flexShrink={0} paddingX={1}>
+                      <Text weight="semibold" color="#00000000">
+                        ↑
+                      </Text>
+                    </Box>
+                  </Box>
                   {isOpen && shownOf(group.rows).map(({ row, depth }) => drawProjectRow(row, depth))}
                   {isOpen && extra > 0 && (
                     <Box paddingLeft={3}>
