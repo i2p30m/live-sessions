@@ -25,7 +25,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.15.9'
+const VERSION = '0.15.10'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -265,8 +265,9 @@ export const register: Register = on => {
                   {row.title}
                 </Text>
               </Button>
-              {/* A plain Button draws its label alone, no padding: the line under it starts flush. */}
-              <Box minWidth={0}>
+              {/* The desktop's plain Button sits its label in by less than a cell; the `xs` step
+                  matches it there. The terminal draws the label alone, flush. */}
+              <Box paddingLeft={isTerminal ? 0 : 'xs'} minWidth={0}>
                 <Text size="footnote" color={THEME.sub} wrap="truncate">
                   {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
                 </Text>
@@ -325,7 +326,8 @@ export const register: Register = on => {
       >
         {depth > 0 && <Text color={THEME.faint}>└</Text>}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
-          <Button key={`open:${row.id}`} plain onPress={() => onOpen($, row.id, row.link)}>
+          {/* dimColor: the one style a desktop's native Button keeps; colour, size and weight it drops. */}
+          <Button key={`open:${row.id}`} plain dimColor onPress={() => onOpen($, row.id, row.link)}>
             <Text color={depth > 0 ? THEME.faint : THEME.muted} wrap="truncate">
               {row.title}
             </Text>
@@ -420,7 +422,7 @@ export const register: Register = on => {
                       </Box>
                       {/* Plain Text, not a Button: a Button drops its Text's colour and weight. The arrow folds. */}
                       <Box flexShrink={1} minWidth={0}>
-                        <Text weight="semibold" color={THEME.project} wrap="truncate">
+                        <Text weight="semibold" color={THEME.strong} wrap="truncate">
                           {group.name}
                         </Text>
                       </Box>

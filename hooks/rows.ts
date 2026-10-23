@@ -209,7 +209,6 @@ export function drawSignature(rows: readonly Row[]): string {
 type Tone = { main: string; text: string; tint: string; border: string; chip: string }
 export const THEME: Record<RowState, Tone> & {
   strong: string
-  project: string
   text: string
   sub: string
   muted: string
@@ -223,7 +222,6 @@ export const THEME: Record<RowState, Tone> & {
   unread: { main: '#f5b041', text: '#f6c46d', tint: '#f5b04112', border: '#f5b0416b', chip: '#f5b04121' },
   idle: { main: '#6b6862', text: '#a8a49c', tint: '#00000000', border: '#3a3835', chip: '#ffffff0d' },
   strong: '#ffffff',
-  project: '#7dd3fc',
   text: '#d6d2cb',
   sub: '#a8a49c',
   muted: '#8a8780',
