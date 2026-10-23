@@ -309,16 +309,16 @@ function nest(rows: readonly Row[]): { row: Row; depth: number }[] {
 
 const byRecency = (rows: readonly Row[]) => [...rows].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
 
-// Context fill as a short bar: blue, amber from 75%, red from 90%.
+// Context fill as a short bar under the state icon: blue, amber from 75%, red from 90%.
 export function contextColor(percent: number): string {
   return percent >= 90 ? '#f0643c' : percent >= 75 ? '#f5b041' : '#4c8dff'
 }
 
 export function contextBar(percent: number): string {
-  const used = (Math.min(100, Math.max(0, percent)) / 100) * 28
+  const used = (Math.min(100, Math.max(0, percent)) / 100) * 26
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 4" width="28" height="4">` +
-    `<rect width="28" height="4" rx="2" fill="#5f5c56" fill-opacity="0.55"/>` +
-    `<rect width="${used.toFixed(1)}" height="4" rx="2" fill="${contextColor(percent)}"/></svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 3" width="26" height="3">` +
+    `<rect width="26" height="3" rx="1.5" fill="#5f5c56" fill-opacity="0.55"/>` +
+    `<rect width="${used.toFixed(1)}" height="3" rx="1.5" fill="${contextColor(percent)}"/></svg>`
   )
 }

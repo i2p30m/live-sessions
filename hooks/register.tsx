@@ -31,6 +31,8 @@ const VIEWED_WRITE_MS = 60_000
 const IDLE_SHOWN = 25
 // Width of an icon button's column, in cells.
 const ICON_COLUMNS = 3
+// A card's left column: the state icon over the context gauge.
+const STATE_COLUMNS = 4
 // The fold arrow's column in a project header; the project's sessions are indented by it,
 // so the project name and the session titles start at the same edge.
 const FOLD_COLUMNS = 2
@@ -227,7 +229,23 @@ export const register: Register = on => {
           {...(isTerminal ? {} : { backgroundColor: t.tint })}
         >
           <Box flexDirection="row" alignItems="center" gap={1}>
-            <Box flexShrink={0}>{icon(row.state)}</Box>
+            {/* A fixed column: the state icon, and under it how full the context is,
+                so the context sits in the same place on every card. */}
+            <Box flexDirection="column" alignItems="center" gap={0} flexShrink={0} width={STATE_COLUMNS}>
+              {icon(row.state)}
+              {row.contextPercent !== undefined && (
+                <Box flexDirection="column" alignItems="center" gap={0}>
+                  {Svg && <Svg source={contextBar(row.contextPercent)} alt={S.context(row.contextPercent)} width={26} height={3} />}
+                  <Text
+                    size="caption"
+                    weight="semibold"
+                    color={row.contextPercent >= 75 ? contextColor(row.contextPercent) : THEME.sub}
+                  >
+                    {row.contextPercent}%
+                  </Text>
+                </Box>
+              )}
+            </Box>
             <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
               <Button key={`open:${row.id}`} plain onPress={() => onOpen($, row.id, row.link)}>
                 <Text weight="semibold" color={row.state === 'idle' ? THEME.text : THEME.strong} wrap="truncate">
@@ -235,23 +253,10 @@ export const register: Register = on => {
                 </Text>
               </Button>
               {/* The plain title Button sits a padding in; the line under it starts there too. */}
-              <Box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
-                <Box flexShrink={1} minWidth={0}>
-                  <Text size="footnote" color={THEME.sub} wrap="truncate">
-                    {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
-                  </Text>
-                </Box>
-                {row.contextPercent !== undefined && (
-                  <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
-                    <Text size="footnote" color={THEME.faint}>
-                      ·
-                    </Text>
-                    {Svg && <Svg source={contextBar(row.contextPercent)} alt={S.context(row.contextPercent)} width={28} height={4} />}
-                    <Text size="footnote" color={isTerminal ? contextColor(row.contextPercent) : THEME.sub}>
-                      {row.contextPercent}%
-                    </Text>
-                  </Box>
-                )}
+              <Box paddingLeft={1} minWidth={0}>
+                <Text size="footnote" color={THEME.sub} wrap="truncate">
+                  {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
+                </Text>
               </Box>
             </Box>
             <Box flexDirection="row" flexShrink={0} gap={1} alignItems="center">
