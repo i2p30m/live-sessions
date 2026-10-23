@@ -5,10 +5,10 @@ A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside th
 - **Needs you**: the session asked a question, wants a plan approved, or is waiting for a tool permission.
 - **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents, monitors).
 - **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked).
-- **Context ring** on each live session: how full its context window is, like Claude Code's own indicator (blue, amber from 75%, red from 90%).
+- **Context** on each live session: a short bar and a percentage beside the project name, showing how full its context window is (blue, amber from 75%, red from 90%).
 - **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane.
 
-Click a title to open that session. ↓ moves a session from the top into its project, ↑ brings it back. Nothing is archived or deleted: it only changes the pane, and a session with new activity comes back to the top on its own.
+Click a title to open that session. **+** next to a project opens a new, empty session in that project's folder. ↓ moves a session from the top into its project, ↑ brings it back. Nothing is archived or deleted: it only changes the pane, and a session with new activity comes back to the top on its own.
 
 The pane opens when a session starts, or with your first message if the app did not show it then; `/live-sessions` (or `/sesje`) opens it again after you close it.
 

@@ -38,6 +38,8 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   on('store.set', (_, e) => (writes.push(`set ${e.key}=${String(e.value)}`), store.set(e.key, e.value), { value: undefined }))
   on('store.delete', (_, e) => (writes.push(`delete ${e.key}`), store.delete(e.key), { value: undefined }))
   const calledTools: string[] = []
+  const runs: string[] = []
+  on('process.run', (_, e) => (runs.push(e.argv.join(' ')), { value: { exitCode: 0, stdout: '', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }))
   on('command.register', () => ({ value: { command: 'sesje' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.panes', () => ({
@@ -78,9 +80,10 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(writes).toContain('set pref:columns=72')
 
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  // A live session that reported its context fill shows it as a ring.
+  // A live session that reported its context fill shows it as a bar and a number.
   const alts = (await ui.findAll({ type: 'Svg' })).map(svg => (svg.props as { alt?: string }).alt)
   expect(alts).toContain('Context 42% used')
+  expect(await ui.find({ type: 'Text', text: /^42%$/ })).toBeDefined()
   // Icon buttons draw their glyph, not a label.
   expect((await ui.find({ key: 'hide:local_new' }))?.text).toBe('↓')
   await ui.select({ key: 'per-project', value: '0' })
@@ -95,6 +98,9 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(await ui.find({ key: 'unhide:local_new' })).toBeDefined()
   await ui.press({ key: 'project:/code/app' })
   expect(await ui.find({ key: 'unhide:local_new' })).toBeUndefined()
+  // + opens a new session in the project's folder.
+  await ui.press({ key: 'new:/code/app' })
+  expect(runs).toContain('open claude://code/new?folder=%2Fcode%2Fapp&source=services')
   // Folding is shared by every session through the store.
   expect(writes).toContain('set pref:closedProjects=/code/app')
   await ui.press({ key: 'project:/code/app' })

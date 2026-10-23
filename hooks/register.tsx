@@ -5,7 +5,8 @@ import type { Row, RowState } from '../types'
 import {
   CLEANUP_HOURS,
   THEME,
-  contextRing,
+  contextBar,
+  contextColor,
   GLYPHS,
   ICONS,
   drawSignature,
@@ -182,10 +183,17 @@ export const register: Register = on => {
     ]
 
     // Icon buttons: a glyph, quiet until hovered (a Button holds text only).
-    const iconButton = (key: string, glyph: string, onPress: () => void) => (
-      <Box key={`wrap:${key}`} flexShrink={0} paddingX={1} hover={{ backgroundColor: THEME.hover }}>
+    // Icon buttons: a glyph on a quiet chip (a Button holds text only). `quiet` drops the chip.
+    const iconButton = (key: string, glyph: string, onPress: () => void, color: string = THEME.text, quiet = false) => (
+      <Box
+        key={`wrap:${key}`}
+        flexShrink={0}
+        paddingX={1}
+        {...(isTerminal || quiet ? {} : { backgroundColor: THEME.chip })}
+        hover={{ backgroundColor: isTerminal ? THEME.hover : THEME.chipHover }}
+      >
         <Button key={key} plain onPress={onPress}>
-          <Text color={THEME.muted} hover={{ color: THEME.text }} weight="semibold">
+          <Text color={quiet ? THEME.muted : color} hover={{ color: THEME.strong }} weight="semibold">
             {glyph}
           </Text>
         </Button>
@@ -221,27 +229,33 @@ export const register: Register = on => {
                   {row.title}
                 </Text>
               </Button>
-              <Text size="footnote" color={THEME.sub} wrap="truncate">
-                {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
-              </Text>
-            </Box>
-            <Box flexDirection="row" flexShrink={0} gap={0} alignItems="center">
-              {row.contextPercent !== undefined &&
-                (Svg ? (
-                  <Box flexShrink={0} paddingX={1}>
-                    <Svg source={contextRing(row.contextPercent)} alt={S.context(row.contextPercent)} width={18} height={18} />
-                  </Box>
-                ) : (
-                  <Text size="footnote" color={THEME.muted}>
-                    {row.contextPercent}%
+              {/* The plain title Button sits a padding in; the line under it starts there too. */}
+              <Box flexDirection="row" alignItems="center" gap={1} paddingLeft={1}>
+                <Box flexShrink={1} minWidth={0}>
+                  <Text size="footnote" color={THEME.sub} wrap="truncate">
+                    {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
                   </Text>
-                ))}
-              {row.state === 'unread' && iconButton(`seen:${row.id}`, '✓', () => onSeen($, row.id))}
+                </Box>
+                {row.contextPercent !== undefined && (
+                  <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
+                    <Text size="footnote" color={THEME.faint}>
+                      ·
+                    </Text>
+                    {Svg && <Svg source={contextBar(row.contextPercent)} alt={S.context(row.contextPercent)} width={28} height={4} />}
+                    <Text size="footnote" color={isTerminal ? contextColor(row.contextPercent) : THEME.sub}>
+                      {row.contextPercent}%
+                    </Text>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+            <Box flexDirection="row" flexShrink={0} gap={1} alignItems="center">
+              {row.state === 'unread' && iconButton(`seen:${row.id}`, '✓', () => onSeen($, row.id), THEME.unread.text)}
               {!row.isSelf && iconButton(`hide:${row.id}`, '↓', () => onHide($, [row.id]))}
             </Box>
           </Box>
           {row.tasks.length > 0 && (
-            <Box flexDirection="column" gap={0} paddingLeft={3}>
+            <Box flexDirection="column" gap={0} paddingLeft={4}>
               <Box flexDirection="row">
                 <Box paddingX={1} {...(isTerminal ? {} : { backgroundColor: t.chip })}>
                   <Button key={`tasks:${row.id}`} plain onPress={() => onToggleTasks($, row.id)}>
@@ -297,7 +311,7 @@ export const register: Register = on => {
             {row.agoShort}
           </Text>
         </Box>
-        {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id))}
+        {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id), THEME.muted, true)}
       </Box>
     )
 
@@ -380,6 +394,7 @@ export const register: Register = on => {
                         </Text>
                       </Button>
                     </Box>
+                    {group.path && iconButton(`new:${group.path}`, '+', () => onNewSession($, group.path), THEME.muted, true)}
                   </Box>
                   {isOpen && shownOf(group.rows).map(({ row, depth }) => drawProjectRow(row, depth))}
                   {isOpen && extra > 0 && (
@@ -592,6 +607,13 @@ async function loadPrefs($: EngineInterface) {
     if (JSON.stringify(paths) !== JSON.stringify(await read($, closedProjectsAtom))) await update($, closedProjectsAtom, () => paths)
   }
   if (typeof columns === 'number' && columns >= 24 && columns <= 400) wantedColumns = columns
+}
+
+// A new, empty session in the project's folder: the deep link the app's
+// "New Claude Code Session Here" action opens.
+async function onNewSession($: EngineInterface, path: string) {
+  trace(`press new ${path}`)
+  await $.process.run(['open', `claude://code/new?folder=${encodeURIComponent(path)}&source=services`])
 }
 
 async function onToggleProject($: EngineInterface, path: string) {

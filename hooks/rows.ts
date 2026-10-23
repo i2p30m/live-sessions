@@ -211,6 +211,8 @@ export const THEME: Record<RowState, Tone> & {
   muted: string
   faint: string
   hover: string
+  chip: string
+  chipHover: string
   line: string
 } = {
   input: { main: '#f0643c', text: '#ff9a7a', tint: '#f0643c17', border: '#f0643c8c', chip: '#f0643c24' },
@@ -224,35 +226,43 @@ export const THEME: Record<RowState, Tone> & {
   muted: '#8a8780',
   faint: '#5f5c56',
   hover: '#ffffff0f',
+  // Action buttons: a quiet chip that brightens on hover.
+  chip: '#2c2a28',
+  chipHover: '#3a3835',
   line: '#2c2a28',
 }
 
-// Icons: plain SVG images (SMIL animates without `isInteractive`).
-const ring = (seconds: number, color: string) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">` +
-  `<circle cx="10" cy="10" r="7.5" fill="none" stroke="${color}" stroke-opacity="0.2" stroke-width="2.5"/>` +
-  `<circle cx="10" cy="10" r="7.5" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="14 34">` +
-  `<animateTransform attributeName="transform" type="rotate" from="0 10 10" to="360 10 10" dur="${seconds}s" repeatCount="indefinite"/>` +
-  `</circle></svg>`
+// Icons: plain SVG images (SMIL animates without `isInteractive`). Each state has its own shape.
+const svg20 = (body: string) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">${body}</svg>`
+
+// Working: three bars bouncing like an equalizer.
+const bar = (x: number, values: string, begin: string) =>
+  `<rect x="${x}" width="3" rx="1.5" fill="#a78bfa">` +
+  `<animate attributeName="height" values="${values}" dur="0.9s" begin="${begin}" repeatCount="indefinite"/>` +
+  `<animate attributeName="y" values="${values
+    .split(';')
+    .map(h => 16 - Number(h))
+    .join(';')}" dur="0.9s" begin="${begin}" repeatCount="indefinite"/></rect>`
 
 export const ICONS: Record<RowState, string> = {
-  input:
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">` +
+  input: svg20(
     `<circle cx="10" cy="10" r="9" fill="#f0643c"><animate attributeName="opacity" values="1;0.5;1" dur="1.4s" repeatCount="indefinite"/></circle>` +
-    `<rect x="9" y="4.5" width="2" height="7" rx="1" fill="#fff"/><circle cx="10" cy="14.5" r="1.2" fill="#fff"/></svg>`,
-  running: ring(1, '#a78bfa'),
-  waiting: ring(3, '#8b7fb8'),
-  unread:
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">` +
-    `<circle cx="10" cy="10" r="8" fill="#f5b041" fill-opacity="0.18"/>` +
-    `<circle cx="10" cy="10" r="4" fill="#f5b041"><animate attributeName="opacity" values="1;0.45;1" dur="1.4s" repeatCount="indefinite"/></circle></svg>`,
-  idle:
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">` +
-    `<circle cx="10" cy="10" r="3.5" fill="#6b6862"/></svg>`,
+      `<rect x="9" y="4.5" width="2" height="7" rx="1" fill="#fff"/><circle cx="10" cy="14.5" r="1.2" fill="#fff"/>`,
+  ),
+  running: svg20(bar(4.5, '5;12;5', '0s') + bar(8.5, '11;4;11', '0s') + bar(12.5, '5;12;5', '0.3s')),
+  waiting: svg20(
+    `<path d="M6 3.5h8M6 16.5h8M7 3.5c0 3.5 6 3.5 6 6.5s-6 3-6 6.5M13 3.5c0 3.5-6 3.5-6 6.5" ` +
+      `fill="none" stroke="#b3a9d6" stroke-width="1.6" stroke-linecap="round"/>`,
+  ),
+  unread: svg20(
+    `<circle cx="10" cy="10" r="5" fill="#f5b041"><animate attributeName="opacity" values="1;0.45;1" dur="1.4s" repeatCount="indefinite"/></circle>`,
+  ),
+  idle: svg20(`<circle cx="10" cy="10" r="4" fill="none" stroke="#6b6862" stroke-width="1.6"/>`),
 }
 
 // Terminal fallback: one glyph per state.
-export const GLYPHS: Record<RowState, string> = { input: '!', running: '◐', waiting: '◌', unread: '●', idle: '·' }
+export const GLYPHS: Record<RowState, string> = { input: '!', running: '≡', waiting: '⧗', unread: '●', idle: '○' }
 
 export type ProjectGroup = {
   path: string
@@ -304,16 +314,16 @@ function nest(rows: readonly Row[]): { row: Row; depth: number }[] {
 
 const byRecency = (rows: readonly Row[]) => [...rows].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
 
-// A context ring like Claude Code's: a gray track and an arc for the share used.
-export function contextRing(percent: number): string {
-  const r = 7
-  const length = 2 * Math.PI * r
-  const used = (Math.min(100, Math.max(0, percent)) / 100) * length
-  const color = percent >= 90 ? '#f0643c' : percent >= 75 ? '#f5b041' : '#4c8dff'
+// Context fill as a short bar: blue, amber from 75%, red from 90%.
+export function contextColor(percent: number): string {
+  return percent >= 90 ? '#f0643c' : percent >= 75 ? '#f5b041' : '#4c8dff'
+}
+
+export function contextBar(percent: number): string {
+  const used = (Math.min(100, Math.max(0, percent)) / 100) * 28
   return (
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" width="20" height="20">` +
-    `<circle cx="10" cy="10" r="${r}" fill="none" stroke="#5f5c56" stroke-opacity="0.55" stroke-width="2.5"/>` +
-    `<circle cx="10" cy="10" r="${r}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" ` +
-    `stroke-dasharray="${used.toFixed(2)} ${length.toFixed(2)}" transform="rotate(-90 10 10)"/></svg>`
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 4" width="28" height="4">` +
+    `<rect width="28" height="4" rx="2" fill="#5f5c56" fill-opacity="0.55"/>` +
+    `<rect width="${used.toFixed(1)}" height="4" rx="2" fill="${contextColor(percent)}"/></svg>`
   )
 }
