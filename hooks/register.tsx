@@ -418,8 +418,8 @@ export const register: Register = on => {
                       </Box>
                       <Box flexShrink={1} minWidth={0}>
                         <Button key={`project-name:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                          <Text weight="bold" color={THEME.strong} wrap="truncate">
-                            {group.name}
+                          <Text weight="semibold" color={THEME.strong} wrap="truncate">
+                            {group.name.toLocaleUpperCase(lang)}
                           </Text>
                         </Button>
                       </Box>
