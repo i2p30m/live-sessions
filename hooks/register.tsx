@@ -324,7 +324,7 @@ export const register: Register = on => {
         {depth > 0 && <Text color={THEME.faint}>└</Text>}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Button key={`open:${row.id}`} plain onPress={() => onOpen($, row.id, row.link)}>
-            <Text color={depth > 0 ? THEME.sub : THEME.text} wrap="truncate">
+            <Text color={depth > 0 ? THEME.muted : THEME.sub} wrap="truncate">
               {row.title}
             </Text>
           </Button>
@@ -359,15 +359,6 @@ export const register: Register = on => {
               </Text>
             )}
           </Box>
-          {PerProject && (
-            <PerProject
-              key="per-project"
-              label={S.perProject}
-              value={String(perProject)}
-              options={PER_PROJECT_CHOICES.map(n => ({ value: String(n), label: n ? `${n}` : S.all }))}
-              onSelect={value => onPerProject($, Number(value))}
-            />
-          )}
           {error && (
             <Text size="footnote" color="#f87171">
               {error}
@@ -400,9 +391,19 @@ export const register: Register = on => {
 
         {projects.length > 0 && (
           <Box flexDirection="column" gap={1}>
-            <Text size="caption" weight="semibold" color={THEME.muted}>
-              {S.projects}
-            </Text>
+            <Box flexDirection="row" alignItems="center" justifyContent="space-between" gap={1}>
+              <Text size="caption" weight="semibold" color={THEME.muted}>
+                {S.projects}
+              </Text>
+              {PerProject && (
+                <PerProject
+                  key="per-project"
+                  value={String(perProject)}
+                  options={PER_PROJECT_CHOICES.map(n => ({ value: String(n), label: n ? `${n}` : S.all }))}
+                  onSelect={value => onPerProject($, Number(value))}
+                />
+              )}
+            </Box>
             {projects.map(group => {
               const isOpen = !closedProjects.includes(group.path)
               const extra = perProject > 0 ? group.rows.length - perProject : 0
@@ -417,7 +418,7 @@ export const register: Register = on => {
                       </Box>
                       <Box flexShrink={1} minWidth={0}>
                         <Button key={`project-name:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
-                          <Text weight="semibold" color={THEME.text} wrap="truncate">
+                          <Text weight="bold" color={THEME.strong} wrap="truncate">
                             {group.name}
                           </Text>
                         </Button>
