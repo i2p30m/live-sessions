@@ -1,0 +1,6 @@
+{
+  "name": "live-sessions",
+  "version": "0.8.1",
+  "description": "Panel „Sesje na żywo”: wszystkie sesje Code z wyraźnym stanem (czeka na Ciebie, pracuje, skończone niesprawdzone).",
+  "types": "./types/index.d.ts"
+}

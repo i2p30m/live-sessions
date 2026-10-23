@@ -1,0 +1,587 @@
+import { atom, read, update } from 'claude-code'
+import type { EngineInterface, Register } from 'claude-code'
+
+import type { Row, RowState } from '../types'
+import {
+  CLEANUP_HOURS,
+  THEME,
+  agoLabel,
+  GLYPHS,
+  ICONS,
+  STATE_LABEL,
+  drawSignature,
+  hiddenByProject,
+  isFactKey,
+  parseIsOnScreen,
+  parseSession,
+  parseSessions,
+  staleRows,
+  tasksLabel,
+  toFacts,
+  toRows,
+  toTasks,
+} from './rows'
+
+const PANE = 'live-sessions'
+const TITLE = 'Sesje na żywo'
+const SERVER = 'ccd_session_mgmt'
+const POLL_MS = 4000
+const SEEN_WRITE_MS = 15_000
+const VIEWED_WRITE_MS = 60_000
+const IDLE_SHOWN = 25
+// Larger answers (~80 KB at 200) reach the mod cut short.
+const LIST_LIMIT = 80
+// Docked width asked for; the person's own drag wins.
+const COLUMNS = 48
+const DEBUG = false
+
+const rowsAtom = atom({ plugin: 'live-sessions', key: 'rows' } as const, [] as Row[])
+const errorAtom = atom({ plugin: 'live-sessions', key: 'error' } as const, null as string | null)
+// How many sessions each project shows at the bottom; 0 shows all. Kept in the store too.
+const perProjectAtom = atom({ plugin: 'live-sessions', key: 'perProject' } as const, 5)
+const PER_PROJECT_KEY = 'pref:perProject'
+const PER_PROJECT_CHOICES = [3, 5, 10, 20, 0]
+const closedProjectsAtom = atom({ plugin: 'live-sessions', key: 'closedProjects' } as const, [] as string[])
+const expandedAtom = atom({ plugin: 'live-sessions', key: 'expandedIds' } as const, [] as string[])
+
+// Module memory: lost on reload, rebuilt by the next poll.
+let selfId: string | undefined
+let isPolling = false
+let lastSig = ''
+let lastError: string | null = null
+let lastSeenWrite = 0
+let lastViewedWrite = 0
+let isAwaitingPermission = false
+// Set when the person closes the pane; /sesje clears it.
+let isClosedByPerson = false
+const activity = new Map<string, number>()
+// Focus bookkeeping (see `noteFocus`).
+let wasFocused = false
+let focusGainedAt = 0
+let lastRefocus = 0
+const debugBuffer: string[] = []
+
+export const register: Register = on => {
+  on('session.start', async ($, e, next) => {
+    await $.command.register({ name: 'sesje', description: 'Otwiera panel „Sesje na żywo”' })
+    await loadPrefs($)
+    void openUnasked($)
+    $.clock.every(POLL_MS, () => void tick($))
+    void tick($)
+
+    return next(e)
+  })
+
+  on('command.run', { command: 'sesje' }, async $ => {
+    isClosedByPerson = false
+    await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS, focus: true })
+    void tick($)
+
+    return { text: 'Panel „Sesje na żywo” otwarty.' }
+  })
+
+  // An open the person's prompt is behind is placed at any width (an unasked one
+  // waits for a wide window), so the first prompt brings the pane up if it is not.
+  on('prompt.submit', async ($, e, next) => {
+    if (!isClosedByPerson) {
+      const panes = await $.ui.panes()
+      if (!panes.some(pane => pane.id === PANE && pane.isPlaced)) {
+        const opened = await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS })
+        trace(`open on prompt ${opened.isPlaced ? 'placed' : opened.reason}`)
+      }
+    }
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    if (e.origin.kind === 'person') isClosedByPerson = true
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // "Needs input": a question, a plan to approve, a permission prompt, or a blocked wrap-up.
+  // Watchers below: one that fails lets the watched event go on.
+  on('tool.call', async ($, e, next) => {
+    const tool = String(e.tool)
+    const isAsking = tool === 'AskUserQuestion' || tool === 'ExitPlanMode'
+    if (isAsking) await setInput($, true)
+    const result = await next(e)
+    if (isAsking || isAwaitingPermission) {
+      isAwaitingPermission = false
+      await setInput($, false)
+    }
+    if (tool === 'mcp__ccd_turn__wrap_up' && (e as unknown as { blocked?: unknown }).blocked === true) {
+      await setInput($, true)
+    }
+
+    return result
+  }).catch(($, e, next) => next(e))
+
+  on('classic.PermissionRequest', async ($, e, next) => {
+    isAwaitingPermission = true
+    await setInput($, true)
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    await setInput($, false)
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  // Each stop reports the background work still in flight.
+  on('classic.Stop', async ($, e, next) => {
+    await saveTasks($, e.background_tasks)
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('classic.SubagentStop', async ($, e, next) => {
+    await saveTasks($, e.background_tasks)
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
+
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e)
+    const PerProject = e.surface === 'mobile' ? undefined : $.ui.resolve(e).Select
+    const Svg = e.surface === 'terminal' ? undefined : $.ui.resolve(e).Svg
+    const now = await $.clock.now()
+    noteFocus($, e.props.isFocused, now)
+
+    const all = await read($, rowsAtom)
+    const error = await read($, errorAtom)
+    const expanded = await read($, expandedAtom)
+    const closedProjects = await read($, closedProjectsAtom)
+    const perProject = await read($, perProjectAtom)
+    const rows = all.filter(row => !row.isHidden)
+    const stale = staleRows(all, now)
+
+    const isTerminal = e.surface === 'terminal'
+    const tone = (state: RowState) => THEME[state]
+    const count = (state: RowState) => rows.filter(row => row.state === state).length
+    const pills: [RowState, string][] = [
+      ['input', `${count('input')} czeka`],
+      ['running', `${count('running')} pracuje`],
+      ['waiting', `${count('waiting')} w tle`],
+      ['unread', `${count('unread')} do sprawdzenia`],
+    ]
+
+    // Icon buttons: a glyph, quiet until hovered (a Button holds text only).
+    const iconButton = (key: string, glyph: string, onPress: () => void) => (
+      <Box key={`wrap:${key}`} flexShrink={0} paddingX={1} hover={{ backgroundColor: THEME.hover }}>
+        <Button key={key} plain onPress={onPress}>
+          <Text color={THEME.muted} hover={{ color: THEME.text }} weight="semibold">
+            {glyph}
+          </Text>
+        </Button>
+      </Box>
+    )
+
+    const icon = (state: RowState) =>
+      Svg ? (
+        <Svg source={ICONS[state]} alt={STATE_LABEL[state]} width={20} height={20} />
+      ) : (
+        <Text color={tone(state).main}>{GLYPHS[state]}</Text>
+      )
+
+    const drawRow = (row: Row) => {
+      const t = tone(row.state)
+      const isOpen = expanded.includes(row.id)
+      return (
+        <Box
+          key={`row:${row.id}`}
+          flexDirection="column"
+          gap={1}
+          paddingX={1}
+          paddingY={1}
+          borderStyle="round"
+          borderColor={isTerminal ? t.main : t.border}
+          {...(isTerminal ? {} : { backgroundColor: t.tint })}
+        >
+          <Box flexDirection="row" alignItems="center" gap={1}>
+            <Box flexShrink={0}>{icon(row.state)}</Box>
+            <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
+              <Button key={`open:${row.id}`} plain onPress={() => onOpen($, row.id, row.link)}>
+                <Text weight="semibold" color={row.state === 'idle' ? THEME.text : THEME.strong} wrap="truncate">
+                  {row.title}
+                </Text>
+              </Button>
+              <Text size="footnote" color={THEME.sub} wrap="truncate">
+                {[row.isSelf ? 'ta sesja' : row.project, row.isWorktree && 'worktree', row.ago].filter(Boolean).join(' · ')}
+              </Text>
+            </Box>
+            <Box flexDirection="row" flexShrink={0} gap={0}>
+              {row.state === 'unread' && iconButton(`seen:${row.id}`, '✓', () => onSeen($, row.id))}
+              {!row.isSelf && iconButton(`hide:${row.id}`, '↓', () => onHide($, [row.id]))}
+            </Box>
+          </Box>
+          {row.tasks.length > 0 && (
+            <Box flexDirection="column" gap={0} paddingLeft={3}>
+              <Box flexDirection="row">
+                <Box paddingX={1} {...(isTerminal ? {} : { backgroundColor: t.chip })}>
+                  <Button key={`tasks:${row.id}`} plain onPress={() => onToggleTasks($, row.id)}>
+                    <Text size="footnote" weight="medium" color={t.text}>
+                      {isOpen ? '▾' : '▸'} {tasksLabel(row.tasks.length)}
+                    </Text>
+                  </Button>
+                </Box>
+              </Box>
+              {isOpen &&
+                row.tasks.map(task => (
+                  <Box key={`task:${row.id}:${task.id}`} flexDirection="row" gap={1} paddingLeft={1}>
+                    <Box flexShrink={0} paddingX={1} {...(isTerminal ? {} : { backgroundColor: THEME.hover })}>
+                      <Text size="caption" mono color={THEME.muted}>
+                        {task.type === 'subagent' ? 'agent' : task.type}
+                      </Text>
+                    </Box>
+                    <Box flexShrink={1} minWidth={0}>
+                      <Text size="footnote" color={THEME.sub} wrap="truncate">
+                        {task.label}
+                      </Text>
+                    </Box>
+                  </Box>
+                ))}
+            </Box>
+          )}
+        </Box>
+      )
+    }
+
+    const shownOf = <T,>(list: readonly T[]) => (perProject > 0 ? list.slice(0, perProject) : list)
+    const shortAgo = (row: Row) => row.ago.replace(/ temu$/, '')
+
+    // A session in its project: one quiet line, as in the sidebar.
+    const drawProjectRow = (row: Row, depth: number) => (
+      <Box
+        key={`hidden:${row.id}`}
+        flexDirection="row"
+        alignItems="center"
+        gap={1}
+        paddingLeft={3 + depth * 2}
+        hover={{ backgroundColor: THEME.hover }}
+      >
+        {depth > 0 && <Text color={THEME.faint}>└</Text>}
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Button key={`open:${row.id}`} plain onPress={() => onOpen($, row.id, row.link)}>
+            <Text color={depth > 0 ? THEME.sub : THEME.text} wrap="truncate">
+              {row.title}
+            </Text>
+          </Button>
+        </Box>
+        <Box flexShrink={0}>
+          <Text size="footnote" color={THEME.muted}>
+            {shortAgo(row)}
+          </Text>
+        </Box>
+        {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id))}
+      </Box>
+    )
+
+    const groups: RowState[] = ['input', 'running', 'waiting', 'unread', 'idle']
+    const projects = hiddenByProject(all)
+
+    return (
+      <Box flexDirection="column" gap={2} paddingX={1} paddingTop={1}>
+        <Box flexDirection="column" gap={1}>
+          <Box flexDirection="row" flexWrap="wrap" gap={1}>
+            {pills.filter(([state]) => count(state) > 0).map(([state, label]) => (
+              <Box key={`pill:${state}`} flexDirection="row" alignItems="center" gap={1} paddingX={1} borderStyle="round" borderColor={isTerminal ? tone(state).main : tone(state).chip} {...(isTerminal ? {} : { backgroundColor: tone(state).chip })}>
+                <Text color={tone(state).main}>●</Text>
+                <Text size="footnote" weight="semibold" color={tone(state).text}>
+                  {label}
+                </Text>
+              </Box>
+            ))}
+            {pills.every(([state]) => count(state) === 0) && (
+              <Text size="footnote" color={THEME.sub}>
+                Nic nie czeka na Ciebie.
+              </Text>
+            )}
+          </Box>
+          {PerProject && (
+            <PerProject
+              key="per-project"
+              label="Sesji na projekt"
+              value={String(perProject)}
+              options={PER_PROJECT_CHOICES.map(n => ({ value: String(n), label: n ? `${n}` : 'Wszystkie' }))}
+              onSelect={value => onPerProject($, Number(value))}
+            />
+          )}
+          {error && (
+            <Text size="footnote" color="#f87171">
+              {error}
+            </Text>
+          )}
+          {stale.length > 0 && (
+            <Box key="cleanup-wrap" flexDirection="row">
+              <Button key="cleanup" plain onPress={() => onHide($, stale.map(row => row.id))}>
+                <Text size="footnote" color={THEME.muted} hover={{ color: THEME.text }}>
+                  ↓ Przenieś nieaktywne &gt; {CLEANUP_HOURS} h do projektów ({stale.length})
+                </Text>
+              </Button>
+            </Box>
+          )}
+        </Box>
+
+        {groups.map(state => {
+          const inGroup = rows.filter(row => row.state === state)
+          if (inGroup.length === 0) return null
+          const shown = state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : inGroup
+          return (
+            <Box key={`group:${state}`} flexDirection="column" gap={1}>
+              <Text size="caption" weight="semibold" color={tone(state).text}>
+                {STATE_LABEL[state].toUpperCase()}
+              </Text>
+              {shown.map(drawRow)}
+            </Box>
+          )
+        })}
+
+        {projects.length > 0 && (
+          <Box flexDirection="column" gap={1}>
+            <Text size="caption" weight="semibold" color={THEME.muted}>
+              PROJEKTY
+            </Text>
+            {projects.map(group => {
+              const isOpen = !closedProjects.includes(group.path)
+              const extra = perProject > 0 ? group.rows.length - perProject : 0
+              return (
+                <Box key={`project:${group.path}`} flexDirection="column" gap={0}>
+                  <Button key={`project:${group.path}`} plain onPress={() => onToggleProject($, group.path)}>
+                    <Text color={THEME.muted}>{isOpen ? '▾ ' : '▸ '}</Text>
+                    <Text weight="semibold" color={THEME.text}>
+                      {group.name}
+                    </Text>
+                    <Text size="footnote" color={THEME.muted}>
+                      {'  '}
+                      {agoLabel(now - group.lastActivityAt)} · {group.rows.length}
+                    </Text>
+                  </Button>
+                  {isOpen && shownOf(group.rows).map(({ row, depth }) => drawProjectRow(row, depth))}
+                  {isOpen && extra > 0 && (
+                    <Box paddingLeft={3}>
+                      <Text size="footnote" color={THEME.muted}>
+                        + {extra} więcej
+                      </Text>
+                    </Box>
+                  )}
+                </Box>
+              )
+            })}
+          </Box>
+        )}
+      </Box>
+    )
+  })
+}
+
+// --- polling -------------------------------------------------------------
+
+async function openUnasked($: EngineInterface) {
+  const opened = await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS })
+  trace(`open at start ${opened.isPlaced ? 'placed' : opened.reason}`)
+}
+
+async function tick($: EngineInterface) {
+  if (isPolling) return
+  isPolling = true
+  try {
+    await markSelfOnScreen($)
+    const panes = await $.ui.panes()
+    if (panes.some(pane => pane.id === PANE && pane.isPlaced)) await poll($)
+    await flushDebug($)
+  } catch (err) {
+    await setError($, `Błąd odświeżania: ${String(err)}`)
+  } finally {
+    isPolling = false
+  }
+}
+
+async function poll($: EngineInterface) {
+  const [listText, selfText, keys] = await Promise.all([
+    callText($, 'list_sessions', { limit: LIST_LIMIT }),
+    callText($, 'get_session', { session_id: 'self' }),
+    $.store.keys(),
+  ])
+  const self = parseSession(selfText)
+  if (self) selfId = self.sessionId
+  const factKeys = keys.filter(isFactKey)
+  const values = await Promise.all(factKeys.map(key => $.store.get(key)))
+  const facts = toFacts(factKeys.map((key, i) => [key, values[i]] as const))
+
+  const listed = parseSessions(listText)
+  const sessions = [...(self ? [self] : []), ...listed]
+  if (listed.length === 0) {
+    await setError($, `Nie udało się odczytać listy sesji (${listText.length} znaków): ${listText.slice(0, 160)}`)
+    return
+  }
+  if (sessions.length === 0) {
+    await setError($, `Nie udało się pobrać sesji: ${listText.slice(0, 200)}`)
+    return
+  }
+  const rows = toRows(sessions, facts, selfId, await $.clock.now())
+  for (const row of rows) activity.set(row.id, row.lastActivityAt)
+  await setError($, null)
+
+  const sig = drawSignature(rows)
+  if (sig === lastSig) return
+  lastSig = sig
+  await update($, rowsAtom, () => rows)
+  trace(`redraw ${rows.length}`)
+}
+
+// While this session is on screen, everything up to now counts as seen.
+async function markSelfOnScreen($: EngineInterface) {
+  const id = await ensureSelf($)
+  if (!id) return
+  const layout = await $.mcp.call('ccd_view', 'get_layout', {})
+  if (!parseIsOnScreen(textOf(layout.content))) return
+  const now = await $.clock.now()
+  if (now - lastSeenWrite >= SEEN_WRITE_MS) {
+    lastSeenWrite = now
+    await $.store.set(`seen:${id}`, now)
+  }
+  if (now - lastViewedWrite >= VIEWED_WRITE_MS) {
+    lastViewedWrite = now
+    await $.store.set(`viewed:${id}`, now)
+  }
+}
+
+async function ensureSelf($: EngineInterface) {
+  if (selfId) return selfId
+  selfId = parseSession(await callText($, 'get_session', { session_id: 'self' }))?.sessionId
+
+  return selfId
+}
+
+async function setInput($: EngineInterface, value: boolean) {
+  const id = await ensureSelf($)
+  if (!id) return
+  if (value) await $.store.set(`input:${id}`, true)
+  else await $.store.delete(`input:${id}`)
+}
+
+async function saveTasks($: EngineInterface, tasks: unknown) {
+  const id = await ensureSelf($)
+  if (id) await $.store.set(`bg:${id}`, toTasks(tasks ?? []))
+}
+
+async function setError($: EngineInterface, error: string | null) {
+  if (error === lastError) return
+  lastError = error
+  await update($, errorAtom, () => error)
+}
+
+async function callText($: EngineInterface, tool: string, args: Record<string, unknown>) {
+  const result = await $.mcp.call(SERVER, tool, args)
+
+  return textOf(result.content)
+}
+
+function textOf(content: ReadonlyArray<{ text?: string }>) {
+  return content.map(block => block.text ?? '').join('\n')
+}
+
+// --- handlers: act first, bookkeeping after -------------------------------
+
+async function onOpen($: EngineInterface, id: string, link: string) {
+  trace(`press open ${id}`)
+  if (link) await $.process.run(['open', link])
+  await markSeen($, id)
+  await grabFocus($, `open:${id}`)
+}
+
+async function onSeen($: EngineInterface, id: string) {
+  trace(`press seen ${id}`)
+  await markSeen($, id)
+  await grabFocus($, `open:${id}`)
+}
+
+async function markSeen($: EngineInterface, id: string) {
+  const at = activity.get(id) ?? (await $.clock.now())
+  await update($, rowsAtom, rows =>
+    rows.map(row => (row.id === id && row.state === 'unread' ? { ...row, state: 'idle' as const } : row)),
+  )
+  await $.store.set(`seen:${id}`, at)
+}
+
+// Hidden from this pane only (`hidden:<id>` = its last activity); new activity brings it back.
+async function onHide($: EngineInterface, ids: readonly string[]) {
+  trace(`press hide ${ids.join(',')}`)
+  await update($, rowsAtom, rows => rows.map(row => (ids.includes(row.id) ? { ...row, isHidden: true } : row)))
+  await Promise.all(ids.map(id => $.store.set(`hidden:${id}`, activity.get(id) ?? 0)))
+  lastSig = ''
+  await grabFocus($, ids[0] ? `open:${ids[0]}` : 'cleanup')
+}
+
+async function onUnhide($: EngineInterface, id: string) {
+  trace(`press unhide ${id}`)
+  await update($, rowsAtom, rows => rows.map(row => (row.id === id ? { ...row, isHidden: false } : row)))
+  await $.store.delete(`hidden:${id}`)
+  lastSig = ''
+  await grabFocus($, `open:${id}`)
+}
+
+async function onToggleTasks($: EngineInterface, id: string) {
+  await update($, expandedAtom, ids => (ids.includes(id) ? ids.filter(one => one !== id) : [...ids, id]))
+  await grabFocus($, `tasks:${id}`)
+}
+
+async function onPerProject($: EngineInterface, count: number) {
+  await update($, perProjectAtom, () => count)
+  await $.store.set(PER_PROJECT_KEY, count)
+}
+
+async function loadPrefs($: EngineInterface) {
+  const count = await $.store.get(PER_PROJECT_KEY)
+  if (typeof count === 'number' && PER_PROJECT_CHOICES.includes(count)) await update($, perProjectAtom, () => count)
+}
+
+async function onToggleProject($: EngineInterface, path: string) {
+  await update($, closedProjectsAtom, paths => (paths.includes(path) ? paths.filter(one => one !== path) : [...paths, path]))
+  await grabFocus($, `project:${path}`)
+}
+
+// --- focus -----------------------------------------------------------------
+
+// After a press the app moves the keyboard to the composer; take it back so the next click lands.
+async function grabFocus($: EngineInterface, key: string) {
+  const result = await $.ui.focus({ requestId: PANE, key }).catch(err => ({ deny: String(err) }))
+  trace(`grab ${key} ${result.deny ?? 'ok'}`)
+  if (result.deny) await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS, focus: true })
+}
+
+// On a session switch the pane gains focus and loses it ~30 ms later to the composer;
+// ask for it back once when that happens (at most every 2 s).
+function noteFocus($: EngineInterface, isFocused: boolean, now: number) {
+  if (isFocused && !wasFocused) focusGainedAt = now
+  if (!isFocused && wasFocused && now - focusGainedAt < 150 && now - lastRefocus > 2000) {
+    lastRefocus = now
+    trace('refocus')
+    $.clock.after(0, () => void refocus($))
+  }
+  if (isFocused !== wasFocused) trace(`render ${isFocused ? 'focused' : 'unfocused'}`)
+  wasFocused = isFocused
+}
+
+async function refocus($: EngineInterface) {
+  await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS, focus: true })
+}
+
+// --- diagnostics (remove once single clicks are confirmed) ---------------------
+
+function trace(line: string) {
+  if (!DEBUG) return
+  debugBuffer.push(`${new Date().toISOString()} ${line}`)
+}
+
+async function flushDebug($: EngineInterface) {
+  if (!DEBUG || debugBuffer.length === 0 || !selfId) return
+  const key = `debug:log:${selfId}`
+  const old = await $.store.get(key)
+  const lines = [...(Array.isArray(old) ? (old as string[]) : []), ...debugBuffer.splice(0)]
+  await $.store.set(key, lines.slice(-300))
+}

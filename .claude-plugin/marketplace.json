@@ -1,0 +1,5 @@
+{
+  "name": "kamil-local-mods",
+  "owner": { "name": "mkowalczyk" },
+  "plugins": [{ "name": "live-sessions", "source": "./" }]
+}
