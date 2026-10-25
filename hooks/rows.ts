@@ -245,16 +245,19 @@ const bar = (x: number, values: string, begin: string) =>
     .map(h => 16 - Number(h))
     .join(';')}" dur="0.9s" begin="${begin}" repeatCount="indefinite"/></rect>`
 
+const slowBar = (x: number, begin: string) =>
+  `<rect x="${x}" y="11" width="3" height="5" rx="1.5" fill="#b3a9d6" fill-opacity="0.7">` +
+  `<animate attributeName="height" values="3;7;3" dur="2.2s" begin="${begin}" repeatCount="indefinite"/>` +
+  `<animate attributeName="y" values="13;9;13" dur="2.2s" begin="${begin}" repeatCount="indefinite"/></rect>`
+
 export const ICONS: Record<RowState, string> = {
   input: svg20(
     `<circle cx="10" cy="10" r="9" fill="#f0643c"><animate attributeName="opacity" values="1;0.5;1" dur="1.4s" repeatCount="indefinite"/></circle>` +
       `<rect x="9" y="4.5" width="2" height="7" rx="1" fill="#fff"/><circle cx="10" cy="14.5" r="1.2" fill="#fff"/>`,
   ),
   running: svg20(bar(4.5, '5;12;5', '0s') + bar(8.5, '11;4;11', '0s') + bar(12.5, '5;12;5', '0.3s')),
-  waiting: svg20(
-    `<path d="M6 3.5h8M6 16.5h8M7 3.5c0 3.5 6 3.5 6 6.5s-6 3-6 6.5M13 3.5c0 3.5-6 3.5-6 6.5" ` +
-      `fill="none" stroke="#b3a9d6" stroke-width="1.6" stroke-linecap="round"/>`,
-  ),
+  // Waiting on background work: Working's bars, dimmer and slower.
+  waiting: svg20(slowBar(4.5, '0s') + slowBar(8.5, '0.4s') + slowBar(12.5, '0.8s')),
   unread: svg20(
     `<circle cx="10" cy="10" r="5" fill="#f5b041"><animate attributeName="opacity" values="1;0.45;1" dur="1.4s" repeatCount="indefinite"/></circle>`,
   ),

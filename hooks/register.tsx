@@ -26,7 +26,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.19.0'
+const VERSION = '0.20.0'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -288,7 +288,7 @@ export const register: Register = on => {
             <Box flexDirection="column" gap={0} paddingLeft={4}>
               <Box flexDirection="row">
                 <Box flexDirection="row" alignItems="center" gap={1} paddingX={1} {...(isTerminal ? {} : { backgroundColor: t.chip })}>
-                  {/* The same hourglass as the "waiting on background work" state. */}
+                  {/* The same slow bars as the "waiting on background work" state. */}
                   {Svg && <Svg source={ICONS.waiting} alt="" width={14} height={14} />}
                   <Button key={`tasks:${row.id}`} plain onPress={() => onToggleTasks($, row.id)}>
                     <Text size="footnote" weight="medium" color={t.text}>
@@ -398,8 +398,8 @@ export const register: Register = on => {
         {groups.map(state => {
           const inGroup = rows.filter(row => row.state === state)
           if (inGroup.length === 0) return null
-          // The most recent idle ones are picked; every section is then drawn by title.
-          const shown = byTitle(state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : inGroup, lang)
+          // OTHER keeps its most recent first; the live groups are drawn by title, so their cards stay put.
+          const shown = state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : byTitle(inGroup, lang)
           return (
             <Box key={`group:${state}`} flexDirection="column" gap={1}>
               <Text size="caption" weight="semibold" color={tone(state).text}>
