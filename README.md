@@ -8,7 +8,7 @@ A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside th
 - **Context** on each live session: a short bar and a percentage under its state icon, always in the same spot, showing how full its context window is (blue, amber from 75%, red from 90%).
 - **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane.
 
-Click a title to open that session. **+** next to a project opens a new, empty session in that project's folder. ↓ moves a session from the top into its project, ↑ brings it back. Nothing is archived or deleted: it only changes the pane, and a session with new activity comes back to the top on its own.
+Click a title to open that session. **+** next to a project opens a new, empty session in that project's folder. ↓ moves a session from the top into its project, ↑ brings it back. Nothing is archived or deleted: it only changes the pane, and a session comes back to the top on its own when it starts or finishes a new turn.
 
 The pane opens when a session starts, or with your first message if the app did not show it then; `/live-sessions` (or `/sesje`) opens it again after you close it.
 

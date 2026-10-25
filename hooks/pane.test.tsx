@@ -29,6 +29,7 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   // The store, in memory, with a record of every write.
   const store = new Map<string, unknown>([
     ['seen:local_old', NOW - 9 * 3600_000],
+    ['done:local_new', NOW - 0.5 * 3600_000],
     ['bg:local_run', [{ id: 'b1', type: 'shell', status: 'running', description: 'npm run dev' }]],
     ['ctx:local_run', 42],
   ])
@@ -97,7 +98,7 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect((await ui.find({ type: 'Text', text: /npm run dev/ }))?.text).toBe('npm run dev')
   await ui.press({ key: 'hide:local_new' })
   expect(await ui.find({ key: 'hide:local_new' })).toBeUndefined()
-  expect(writes).toContain(`set hidden:local_new=${NOW - 0.5 * 3600_000}`)
+  expect(writes.some(write => write.startsWith('set hidden:local_new='))).toBe(true)
   // It sits under its project at the bottom, unfolded; folding hides it.
   expect(await ui.find({ key: 'unhide:local_new' })).toBeDefined()
   await ui.press({ key: 'project:/code/app' })
@@ -140,7 +141,11 @@ test('a prompt opens the pane when an unasked open was not placed', async ($, on
 
 test('with Claude Code set to Polish the pane speaks Polish', async ($, on) => {
   mock.clock(on, { now: NOW })
-  mock.store(on)
+  const store = new Map<string, unknown>([['done:local_new', NOW - 0.5 * 3600_000]])
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.keys', () => ({ value: [...store.keys()] }))
+  on('store.set', (_, e) => (store.set(e.key, e.value), { value: undefined }))
+  on('store.delete', (_, e) => (store.delete(e.key), { value: undefined }))
   on('settings.read', () => ({ value: { language: 'polish' } }))
   on('command.register', () => ({ value: { command: 'sesje' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))

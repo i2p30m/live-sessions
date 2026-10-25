@@ -33,6 +33,7 @@ test('states are ordered input, running, waiting, unread, idle', async () => {
     ['input:a', true],
     ['bg:c', [{ id: 'b1', type: 'shell', status: 'running', command: 'npm run dev' }]],
     ['seen:e', NOW],
+    ['done:d', NOW - 3600_000],
   ])
   const rows = toRows(
     [session('e'), session('d'), session('c'), session('b', { isRunning: true }), session('a', { isRunning: true })],
@@ -54,12 +55,25 @@ test('viewing counts as seeing', async () => {
   expect(row?.state).toBe('idle')
 })
 
-test('a hidden row is flagged, and returns on new activity', async () => {
+test('a hidden row is flagged, and returns on a new turn only', async () => {
   const hiddenAt = NOW - 2 * 3600_000
   const [quiet] = toRows([session('a', { lastActivityAt: at(3) })], toFacts([['hidden:a', hiddenAt]]), undefined, NOW)
   expect(quiet?.isHidden).toBe(true)
-  const [active] = toRows([session('a', { lastActivityAt: at(1) })], toFacts([['hidden:a', hiddenAt]]), undefined, NOW)
-  expect(active?.isHidden).toBe(false)
+  // The app moves lastActivityAt with no new turn (a reload): still hidden.
+  const [touched] = toRows([session('a', { lastActivityAt: at(1) })], toFacts([['hidden:a', hiddenAt]]), undefined, NOW)
+  expect(touched?.isHidden).toBe(true)
+  const [done] = toRows([session('a')], toFacts([['hidden:a', hiddenAt], ['done:a', NOW - 3600_000]]), undefined, NOW)
+  expect(done?.isHidden).toBe(false)
+  const [running] = toRows([session('a', { isRunning: true })], toFacts([['hidden:a', hiddenAt]]), undefined, NOW)
+  expect(running?.isHidden).toBe(false)
+})
+
+test('done, not checked means a turn ended after it was seen, not any later activity', async () => {
+  const seen = NOW - 2 * 3600_000
+  const [touched] = toRows([session('a', { lastActivityAt: at(1) })], toFacts([['seen:a', seen], ['done:a', seen - 1]]), undefined, NOW)
+  expect(touched?.state).toBe('idle')
+  const [done] = toRows([session('a')], toFacts([['seen:a', seen], ['done:a', seen + 1]]), undefined, NOW)
+  expect(done?.state).toBe('unread')
 })
 
 test('archived sessions and duplicates are dropped', async () => {

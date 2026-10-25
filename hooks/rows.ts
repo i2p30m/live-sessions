@@ -26,15 +26,18 @@ export type Facts = {
   ctx: Record<string, number>
   // Flagged by hand to come back to (when, in ms); shown as "done, not checked".
   flag: Record<string, number>
+  // When the session last finished a turn (its Stop), in ms. Its `lastActivityAt` is no use here:
+  // the app moves it with no new turn (reloading a session), which kept checked sessions unread.
+  done: Record<string, number>
   viewed: Record<string, number>
   hidden: Record<string, number>
   bg: Record<string, BgTask[]>
   input: Record<string, boolean>
 }
 
-export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx', 'flag'] as const
+export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx', 'flag', 'done'] as const
 
-export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {}, ctx: {}, flag: {} })
+export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {}, ctx: {}, flag: {}, done: {} })
 
 const RANK: Record<RowState, number> = { input: 0, running: 1, waiting: 2, unread: 3, idle: 4 }
 
@@ -86,7 +89,7 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>, lang
     } else if (fact === 'bg') {
       facts.bg[id] = toTasks(value, lang)
     } else if ((FACT_PREFIXES as readonly string[]).includes(fact) && typeof value === 'number') {
-      facts[fact as 'seen' | 'viewed' | 'hidden' | 'ctx' | 'flag'][id] = value
+      facts[fact as 'seen' | 'viewed' | 'hidden' | 'ctx' | 'flag' | 'done'][id] = value
     }
   }
   return facts
@@ -148,9 +151,10 @@ export function toRows(
     const id = session.sessionId
     const isSelf = id === selfId
     const lastActivityAt = time(session.lastActivityAt)
-    // Hidden from the pane only; new activity brings it back.
+    // Hidden from the pane only; a new turn (running, asking, or done since) brings it back.
     const hiddenAt = facts.hidden[id]
-    const isHidden = hiddenAt !== undefined && lastActivityAt <= hiddenAt
+    const isHidden =
+      hiddenAt !== undefined && !session.isRunning && !facts.input[id] && (facts.done[id] ?? 0) <= hiddenAt
 
     const seenAt = Math.max(facts.seen[id] ?? 0, facts.viewed[id] ?? 0)
     const state: RowState = facts.input[id]
@@ -159,7 +163,7 @@ export function toRows(
         ? 'running'
         : (facts.bg[id]?.length ?? 0) > 0
           ? 'waiting'
-          : facts.flag[id] !== undefined || (!isSelf && lastActivityAt > seenAt)
+          : facts.flag[id] !== undefined || (!isSelf && (facts.done[id] ?? 0) > seenAt)
             ? 'unread'
             : 'idle'
 

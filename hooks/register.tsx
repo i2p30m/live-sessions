@@ -25,7 +25,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.15.11'
+const VERSION = '0.15.12'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -74,7 +74,6 @@ let isClosedByPerson = false
 let wantedColumns = COLUMNS
 let seenColumns = 0
 let widthTimer: { cancel: () => void } | undefined
-const activity = new Map<string, number>()
 // Focus bookkeeping (see `noteFocus`).
 let wasFocused = false
 let focusGainedAt = 0
@@ -153,9 +152,9 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // Each stop reports the background work still in flight.
+  // Each stop reports the background work still in flight, and marks the turn done.
   on('classic.Stop', async ($, e, next) => {
-    await saveTasks($, e.background_tasks)
+    await Promise.all([saveTasks($, e.background_tasks), markDone($)])
 
     return next(e)
   }).catch(($, e, next) => next(e))
@@ -499,7 +498,6 @@ async function poll($: EngineInterface) {
     return
   }
   const rows = toRows(sessions, facts, selfId, await $.clock.now(), lang)
-  for (const row of rows) activity.set(row.id, row.lastActivityAt)
   await setError($, null)
 
   const sig = drawSignature(rows)
@@ -567,6 +565,11 @@ async function saveTasks($: EngineInterface, tasks: unknown) {
   if (id) await $.store.set(`bg:${id}`, toTasks(tasks ?? [], lang))
 }
 
+async function markDone($: EngineInterface) {
+  const id = await ensureSelf($)
+  if (id) await $.store.set(`done:${id}`, await $.clock.now())
+}
+
 async function setError($: EngineInterface, error: string | null) {
   if (error === lastError) return
   lastError = error
@@ -599,7 +602,7 @@ async function onSeen($: EngineInterface, id: string) {
 }
 
 async function markSeen($: EngineInterface, id: string) {
-  const at = activity.get(id) ?? (await $.clock.now())
+  const at = await $.clock.now()
   await update($, rowsAtom, rows =>
     rows.map(row => (row.id === id && row.state === 'unread' ? { ...row, state: 'idle' as const } : row)),
   )
@@ -616,11 +619,12 @@ async function onFlag($: EngineInterface, id: string) {
   await grabFocus($, `open:${id}`)
 }
 
-// Hidden from this pane only (`hidden:<id>` = its last activity); new activity brings it back.
+// Hidden from this pane only (`hidden:<id>` = when); a new turn brings it back.
 async function onHide($: EngineInterface, ids: readonly string[]) {
   trace(`press hide ${ids.join(',')}`)
   await update($, rowsAtom, rows => rows.map(row => (ids.includes(row.id) ? { ...row, isHidden: true } : row)))
-  await Promise.all(ids.map(id => $.store.set(`hidden:${id}`, activity.get(id) ?? 0)))
+  const now = await $.clock.now()
+  await Promise.all(ids.map(id => $.store.set(`hidden:${id}`, now)))
   lastSig = ''
   await grabFocus($, ids[0] ? `open:${ids[0]}` : 'cleanup')
 }
