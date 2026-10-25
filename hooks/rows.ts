@@ -328,13 +328,3 @@ export function contextBar(percent: number): string {
   )
 }
 
-// The bar on the left edge of the card of the session the pane is in: an image has a fixed height,
-// so the bar is a tall body cut to the card, between two round caps.
-const selfMark = (height: number, body: string) =>
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 ${height}" width="3" height="${height}">` +
-  `<path d="${body}" fill="${THEME.strong}"/></svg>`
-export const SELF_MARK = {
-  top: selfMark(1.5, 'M0 1.5A1.5 1.5 0 0 1 3 1.5Z'),
-  body: selfMark(2000, 'M0 0H3V2000H0Z'),
-  bottom: selfMark(1.5, 'M0 0A1.5 1.5 0 0 0 3 0Z'),
-}

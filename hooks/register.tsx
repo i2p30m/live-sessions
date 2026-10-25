@@ -9,7 +9,6 @@ import {
   contextColor,
   GLYPHS,
   ICONS,
-  SELF_MARK,
   drawSignature,
   hiddenByProject,
   isFactKey,
@@ -26,7 +25,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.18.1'
+const VERSION = '0.18.2'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -248,21 +247,25 @@ export const register: Register = on => {
         >
           {/* The session this pane is in: a bar down the card's left edge, like an active tab, a row
               in from top and bottom to clear the round corners. Laid over the padding: nothing moves. */}
-          {row.isSelf && (
-            <Box key={`self-mark:${row.id}`} position="absolute" left={0} top={1} bottom={1} flexDirection="column">
-              {Svg ? (
-                <Box flexDirection="column" flexGrow={1} minHeight={0}>
-                  <Svg source={SELF_MARK.top} alt={S.thisSession} width={3} height={1.5} />
-                  <Box flexGrow={1} flexShrink={1} minHeight={0} overflow="hidden">
-                    <Svg source={SELF_MARK.body} alt="" width={3} height={2000} />
-                  </Box>
-                  <Svg source={SELF_MARK.bottom} alt="" width={3} height={1.5} />
-                </Box>
-              ) : (
+          {row.isSelf &&
+            (isTerminal ? (
+              <Box key={`self-mark:${row.id}`} position="absolute" left={0} top={1}>
                 <Text color={THEME.strong}>▌</Text>
-              )}
-            </Box>
-          )}
+              </Box>
+            ) : (
+              // An empty Box with a round border draws as a pill as tall as its top and bottom allow.
+              <Box
+                key={`self-mark:${row.id}`}
+                position="absolute"
+                left={0}
+                top={1}
+                bottom={1}
+                width={0}
+                borderStyle="round"
+                borderColor={THEME.strong}
+                backgroundColor={THEME.strong}
+              />
+            ))}
           <Box flexDirection="row" alignItems="center" gap={1}>
             {/* A fixed column: the state icon, and under it how full the context is,
                 so the context sits in the same place on every card. */}
