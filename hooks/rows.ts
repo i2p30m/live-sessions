@@ -327,3 +327,8 @@ export function contextBar(percent: number): string {
     `<rect width="${used.toFixed(1)}" height="3" rx="1.5" fill="${contextColor(percent)}"/></svg>`
   )
 }
+
+// The bar on the left edge of the card of the session the pane is in.
+export const SELF_MARK =
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 28" width="3" height="28">` +
+  `<rect width="3" height="28" rx="1.5" fill="${THEME.strong}"/></svg>`

@@ -9,6 +9,7 @@ import {
   contextColor,
   GLYPHS,
   ICONS,
+  SELF_MARK,
   drawSignature,
   hiddenByProject,
   isFactKey,
@@ -25,7 +26,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.15.12'
+const VERSION = '0.18.0'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -245,6 +246,13 @@ export const register: Register = on => {
           borderColor={isTerminal ? t.main : t.border}
           {...(isTerminal ? {} : { backgroundColor: t.tint })}
         >
+          {/* The session this pane is in: a bar on the card's left edge, like an active tab.
+              Laid over the padding, so nothing on the card moves. */}
+          {row.isSelf && (
+            <Box key={`self-mark:${row.id}`} position="absolute" left={0} top={0} bottom={0} justifyContent="center">
+              {Svg ? <Svg source={SELF_MARK} alt={S.thisSession} width={3} height={28} /> : <Text color={THEME.strong}>▌</Text>}
+            </Box>
+          )}
           <Box flexDirection="row" alignItems="center" gap={1}>
             {/* A fixed column: the state icon, and under it how full the context is,
                 so the context sits in the same place on every card. */}

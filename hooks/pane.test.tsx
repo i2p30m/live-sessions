@@ -85,6 +85,9 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   const alts = (await ui.findAll({ type: 'Svg' })).map(svg => (svg.props as { alt?: string }).alt)
   expect(alts).toContain('Context 42% used')
   expect(await ui.find({ type: 'Text', text: /^42%$/ })).toBeDefined()
+  // Only the session the pane is in carries the active-tab bar.
+  expect(await ui.find({ key: 'self-mark:local_me' })).toBeDefined()
+  expect(await ui.find({ key: 'self-mark:local_run' })).toBeUndefined()
   // The circle of an idle session flags it to come back to.
   await ui.press({ key: 'flag:local_old' })
   expect(writes.some(write => write.startsWith('set flag:local_old='))).toBe(true)
