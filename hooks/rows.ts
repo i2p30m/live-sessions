@@ -272,15 +272,15 @@ export type ProjectGroup = {
   rows: { row: Row; depth: number }[]
 }
 
-// Hidden rows by project, the project worked on most recently first,
-// each session followed by the ones it started (like the sidebar).
-export function hiddenByProject(rows: readonly Row[], lang: Lang = 'en'): ProjectGroup[] {
+// Hidden rows by project (all rows with `includeActive`), the project worked on most recently
+// first, each session followed by the ones it started (like the sidebar).
+export function hiddenByProject(rows: readonly Row[], lang: Lang = 'en', includeActive = false): ProjectGroup[] {
   const latest = new Map<string, number>()
   for (const row of rows) latest.set(row.projectPath, Math.max(latest.get(row.projectPath) ?? 0, row.lastActivityAt))
 
   const groups = new Map<string, Row[]>()
   for (const row of rows) {
-    if (!row.isHidden) continue
+    if (!row.isHidden && !includeActive) continue
     groups.set(row.projectPath, [...(groups.get(row.projectPath) ?? []), row])
   }
 

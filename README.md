@@ -6,7 +6,7 @@ A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside th
 - **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents; monitors are left out, as in the app).
 - **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked). Click the circle of any other session to flag it to come back to: it joins this group until you open it or press ✓.
 - **Context** on each live session: a short bar and a percentage under its state icon, always in the same spot, showing how full its context window is (blue, amber from 75%, red from 90%).
-- **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane.
+- **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane. The ⊕ in the PROJECTS header lists the sessions shown above in their projects too (⊖ hides them again); hover it to see which it does.
 
 Click a title to open that session. **+** next to a project opens a new, empty session in that project's folder. ↓ moves a session from the top into its project, ↑ brings it back. Nothing is archived or deleted: it only changes the pane, and a session comes back to the top on its own when it starts or finishes a new turn.
 

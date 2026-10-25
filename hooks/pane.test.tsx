@@ -91,8 +91,6 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(await ui.find({ key: 'seen:local_old' })).toBeDefined()
   // Icon buttons draw their glyph, not a label.
   expect((await ui.find({ key: 'hide:local_new' }))?.text).toBe('↓')
-  await ui.select({ key: 'per-project', value: '0' })
-  expect(writes).toContain('set pref:perProject=0')
   expect(await ui.find({ type: 'Text', text: /npm run dev/ })).toBeUndefined()
   await ui.press({ key: 'tasks:local_run' })
   expect((await ui.find({ type: 'Text', text: /npm run dev/ }))?.text).toBe('npm run dev')
@@ -101,6 +99,17 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(writes.some(write => write.startsWith('set hidden:local_new='))).toBe(true)
   // It sits under its project at the bottom, unfolded; folding hides it.
   expect(await ui.find({ key: 'unhide:local_new' })).toBeDefined()
+  // The sessions-per-project choice sits in the PROJECTS header once there are projects.
+  await ui.select({ key: 'per-project', value: '0' })
+  expect(writes).toContain('set pref:perProject=0')
+  // The ⊕ toggle lists the sessions shown above in their projects too, without a ↑.
+  expect(await ui.find({ key: 'open-in-project:local_run' })).toBeUndefined()
+  await ui.press({ key: 'show-active' })
+  expect(writes).toContain('set pref:showActiveInProjects=true')
+  expect(await ui.find({ key: 'open-in-project:local_run' })).toBeDefined()
+  expect(await ui.find({ key: 'unhide:local_run' })).toBeUndefined()
+  await ui.press({ key: 'show-active' })
+  expect(await ui.find({ key: 'open-in-project:local_run' })).toBeUndefined()
   await ui.press({ key: 'project:/code/app' })
   expect(await ui.find({ key: 'unhide:local_new' })).toBeUndefined()
   // + opens a new session in the project's folder.

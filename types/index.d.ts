@@ -44,6 +44,8 @@ declare module 'claude-code' {
       closedProjects: string[]
       // Sessions shown per project at the bottom; 0 shows all.
       perProject: number
+      // Projects list the sessions shown above too, not only the hidden ones.
+      showActiveInProjects: boolean
     }
   }
 }

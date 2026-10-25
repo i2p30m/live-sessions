@@ -53,6 +53,8 @@ const errorAtom = atom({ plugin: 'live-sessions', key: 'error' } as const, null 
 // How many sessions each project shows at the bottom; 0 shows all. Kept in the store too.
 const perProjectAtom = atom({ plugin: 'live-sessions', key: 'perProject' } as const, 5)
 const PER_PROJECT_KEY = 'pref:perProject'
+const showActiveAtom = atom({ plugin: 'live-sessions', key: 'showActiveInProjects' } as const, false)
+const SHOW_ACTIVE_KEY = 'pref:showActiveInProjects'
 const PER_PROJECT_CHOICES = [3, 5, 10, 20, 0]
 const closedProjectsAtom = atom({ plugin: 'live-sessions', key: 'closedProjects' } as const, [] as string[])
 const expandedAtom = atom({ plugin: 'live-sessions', key: 'expandedIds' } as const, [] as string[])
@@ -326,7 +328,7 @@ export const register: Register = on => {
         {depth > 0 && <Text color={THEME.faint}>└</Text>}
         <Box flexGrow={1} flexShrink={1} minWidth={0}>
           {/* dimColor: the one style a desktop's native Button keeps; colour, size and weight it drops. */}
-          <Button key={`open:${row.id}`} plain dimColor onPress={() => onOpen($, row.id, row.link)}>
+          <Button key={`open-in-project:${row.id}`} plain dimColor={row.isHidden} onPress={() => onOpen($, row.id, row.link)}>
             <Text color={depth > 0 ? THEME.faint : THEME.muted} wrap="truncate">
               {row.title}
             </Text>
@@ -337,12 +339,20 @@ export const register: Register = on => {
             {row.agoShort}
           </Text>
         </Box>
-        {iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id))}
+        {row.isHidden ? (
+          iconButton(`unhide:${row.id}`, '↑', () => onUnhide($, row.id))
+        ) : (
+          // A session that is also shown above: its state glyph where ↑ would be.
+          <Box flexShrink={0} width={ICON_COLUMNS} justifyContent="center">
+            <Text color={tone(row.state).main}>{GLYPHS[row.state]}</Text>
+          </Box>
+        )}
       </Box>
     )
 
     const groups: RowState[] = ['input', 'running', 'waiting', 'unread', 'idle']
-    const projects = hiddenByProject(all, lang)
+    const showActive = await read($, showActiveAtom)
+    const projects = hiddenByProject(all, lang, showActive)
 
     return (
       <Box flexDirection="column" gap={2} paddingX={1} paddingTop={1}>
@@ -395,9 +405,30 @@ export const register: Register = on => {
         {projects.length > 0 && (
           <Box flexDirection="column" gap={1}>
             <Box flexDirection="row" alignItems="center" justifyContent="space-between" gap={1}>
-              <Text size="caption" weight="semibold" color={THEME.muted}>
-                {S.projects}
-              </Text>
+              <Box flexGrow={1}>
+                <Text size="caption" weight="semibold" color={THEME.muted}>
+                  {S.projects}
+                </Text>
+              </Box>
+              {/* An icon toggle; hovering it reveals what it does. */}
+              <Box flexDirection="row" alignItems="center" gap={1} flexShrink={0}>
+                <Box display="none" hover={{ scope: 'show-active', display: 'flex' }}>
+                  <Text size="footnote" color={THEME.sub}>
+                    {showActive ? S.hideActive : S.showActive}
+                  </Text>
+                </Box>
+                <Box
+                  key="show-active-wrap"
+                  flexShrink={0}
+                  width={ICON_COLUMNS}
+                  justifyContent="center"
+                  hover={{ scope: 'show-active', backgroundColor: THEME.hover }}
+                >
+                  <Button key="show-active" plain dimColor={!showActive} onPress={() => onToggleShowActive($)}>
+                    {showActive ? '⊖' : '⊕'}
+                  </Button>
+                </Box>
+              </Box>
               {PerProject && (
                 <PerProject
                   key="per-project"
@@ -649,11 +680,15 @@ async function onPerProject($: EngineInterface, count: number) {
 
 // Pane settings live in the store, so every session shows the pane the same way.
 async function loadPrefs($: EngineInterface) {
-  const [count, closed, columns] = await Promise.all([
+  const [count, closed, columns, showActive] = await Promise.all([
     $.store.get(PER_PROJECT_KEY),
     $.store.get(CLOSED_PROJECTS_KEY),
     $.store.get(COLUMNS_KEY),
+    $.store.get(SHOW_ACTIVE_KEY),
   ])
+  if (typeof showActive === 'boolean' && showActive !== (await read($, showActiveAtom))) {
+    await update($, showActiveAtom, () => showActive)
+  }
   if (typeof count === 'number' && PER_PROJECT_CHOICES.includes(count) && count !== (await read($, perProjectAtom))) {
     await update($, perProjectAtom, () => count)
   }
@@ -669,6 +704,12 @@ async function loadPrefs($: EngineInterface) {
 async function onNewSession($: EngineInterface, path: string) {
   trace(`press new ${path}`)
   await $.process.run(['open', `claude://code/new?folder=${encodeURIComponent(path)}&source=services`])
+}
+
+async function onToggleShowActive($: EngineInterface) {
+  const isShown = await update($, showActiveAtom, isShown => !isShown)
+  await $.store.set(SHOW_ACTIVE_KEY, isShown)
+  await grabFocus($, 'show-active')
 }
 
 async function onToggleProject($: EngineInterface, path: string) {

@@ -21,6 +21,8 @@ export type Strings = {
   all: string
   cleanup: (hours: number, n: number) => string
   projects: string
+  showActive: string
+  hideActive: string
   more: (n: number) => string
   thisSession: string
   credit: (version: string) => string
@@ -60,6 +62,8 @@ export const STRINGS: Record<Lang, Strings> = {
     all: 'All',
     cleanup: (hours, n) => `↓ Move idle > ${hours} h to projects (${n})`,
     projects: 'PROJECTS',
+    showActive: 'Show active sessions here too',
+    hideActive: 'Hide active sessions here',
     more: n => `+ ${n} more`,
     thisSession: 'this session',
     credit: version => `created by i2p30m · version ${version}`,
@@ -97,6 +101,8 @@ export const STRINGS: Record<Lang, Strings> = {
     all: 'Wszystkie',
     cleanup: (hours, n) => `↓ Przenieś nieaktywne > ${hours} h do projektów (${n})`,
     projects: 'PROJEKTY',
+    showActive: 'Pokaż tu też aktywne sesje',
+    hideActive: 'Ukryj tu aktywne sesje',
     more: n => `+ ${n} więcej`,
     thisSession: 'ta sesja',
     credit: version => `stworzone przez i2p30m · wersja ${version}`,
