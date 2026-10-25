@@ -94,6 +94,10 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   expect(await ui.find({ type: 'Text', text: /npm run dev/ })).toBeUndefined()
   await ui.press({ key: 'tasks:local_run' })
   expect((await ui.find({ type: 'Text', text: /npm run dev/ }))?.text).toBe('npm run dev')
+  // A task of another session opens that session and asks it to show its tasks pane.
+  await ui.press({ key: 'open-task:local_run:b1' })
+  expect(runs).toContain('open claude://x/run')
+  expect(writes.some(write => write.startsWith('set showTasks:local_run='))).toBe(true)
   await ui.press({ key: 'hide:local_new' })
   expect(await ui.find({ key: 'hide:local_new' })).toBeUndefined()
   expect(writes.some(write => write.startsWith('set hidden:local_new='))).toBe(true)
@@ -125,6 +129,38 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   // Nothing was ever archived: the mod only reads sessions.
   expect(calledTools.filter(tool => !['list_sessions', 'get_session', 'get_layout'].includes(tool))).toEqual([])
   await ui.unmount()
+})
+
+test('a session asked to show its tasks does so once it is on screen', async ($, on) => {
+  const clock = mock.clock(on, { now: NOW })
+  const store = new Map<string, unknown>([['showTasks:local_me', NOW]])
+  on('store.get', (_, e) => ({ value: store.get(e.key) }))
+  on('store.keys', () => ({ value: [...store.keys()] }))
+  on('store.set', (_, e) => (store.set(e.key, e.value), { value: undefined }))
+  on('store.delete', (_, e) => (store.delete(e.key), { value: undefined }))
+  on('command.register', () => ({ value: { command: 'sesje' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.panes', () => ({ value: [] }))
+  let isOnScreen = false
+  const shown: unknown[] = []
+  on('mcp.call', (_, e) => {
+    if (e.tool === 'show_pane') shown.push(e.args)
+    const text =
+      e.tool === 'get_session'
+        ? JSON.stringify(SELF)
+        : e.tool === 'get_layout'
+          ? JSON.stringify({ views: isOnScreen ? [{ sessionId: 'local_me' }] : [] })
+          : '{}'
+    return { value: { content: [{ type: 'text', text }], isError: false } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+
+  await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
+  expect(shown).toEqual([])
+  isOnScreen = true
+  await clock.advance(4000)
+  expect(shown).toEqual([{ pane: 'tasks' }])
+  expect(store.has('showTasks:local_me')).toBe(false)
 })
 
 test('a prompt opens the pane when an unasked open was not placed', async ($, on) => {

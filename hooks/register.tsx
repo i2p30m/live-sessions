@@ -32,6 +32,9 @@ const SEEN_WRITE_MS = 15_000
 // How long a flagged session must be on screen before its flag counts as handled.
 const FLAG_SETTLE_MS = 15_000
 const VIEWED_WRITE_MS = 60_000
+// A task click in another session's pane: `showTasks:<id>`, honoured within this long.
+const SHOW_TASKS = 'showTasks'
+const SHOW_TASKS_MS = 30_000
 const IDLE_SHOWN = 25
 // Width of an icon button's column, in cells.
 const ICON_COLUMNS = 3
@@ -300,10 +303,12 @@ export const register: Register = on => {
                         {task.type === 'subagent' ? 'agent' : task.type}
                       </Text>
                     </Box>
-                    <Box flexShrink={1} minWidth={0}>
-                      <Text size="footnote" color={THEME.sub} wrap="truncate">
-                        {task.label}
-                      </Text>
+                    <Box flexShrink={1} minWidth={0} hover={{ backgroundColor: THEME.hover }}>
+                      <Button key={`open-task:${row.id}:${task.id}`} plain onPress={() => onOpenTask($, row)}>
+                        <Text size="footnote" color={THEME.sub} wrap="truncate">
+                          {task.label}
+                        </Text>
+                      </Button>
                     </Box>
                   </Box>
                 ))}
@@ -557,6 +562,12 @@ async function markSelfOnScreen($: EngineInterface) {
   const layout = await $.mcp.call('ccd_view', 'get_layout', {})
   if (!parseIsOnScreen(textOf(layout.content))) return
   const now = await $.clock.now()
+  // Another session's pane asked us to show our background tasks (see `onOpenTask`).
+  const tasksAskedAt = await $.store.get(`${SHOW_TASKS}:${id}`)
+  if (typeof tasksAskedAt === 'number') {
+    await $.store.delete(`${SHOW_TASKS}:${id}`)
+    if (now - tasksAskedAt < SHOW_TASKS_MS) await showTasksPane($)
+  }
   // Back in a session flagged to come back to: once it has been on screen a while, the flag is done.
   const flaggedAt = await $.store.get(`flag:${id}`)
   if (typeof flaggedAt === 'number' && now - flaggedAt > FLAG_SETTLE_MS) await $.store.delete(`flag:${id}`)
@@ -671,6 +682,25 @@ async function onUnhide($: EngineInterface, id: string) {
 async function onToggleTasks($: EngineInterface, id: string) {
   await update($, expandedAtom, ids => (ids.includes(id) ? ids.filter(one => one !== id) : [...ids, id]))
   await grabFocus($, `tasks:${id}`)
+}
+
+// The app's tasks pane belongs to its session and only that session can show it: our own is
+// shown at once; for another, open it and leave a request its own mod honours once on screen.
+async function onOpenTask($: EngineInterface, row: Row) {
+  trace(`press task ${row.id}`)
+  if (row.isSelf) {
+    await showTasksPane($)
+  } else {
+    await $.store.set(`${SHOW_TASKS}:${row.id}`, await $.clock.now())
+    if (row.link) await $.process.run(['open', row.link])
+    await markSeen($, row.id)
+  }
+  await grabFocus($, `tasks:${row.id}`)
+}
+
+async function showTasksPane($: EngineInterface) {
+  const result = await $.mcp.call('ccd_view', 'show_pane', { pane: 'tasks' })
+  trace(`show tasks ${textOf(result.content).slice(0, 80)}`)
 }
 
 async function onPerProject($: EngineInterface, count: number) {
