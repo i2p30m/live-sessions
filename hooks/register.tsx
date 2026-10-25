@@ -25,7 +25,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.18.2'
+const VERSION = '0.18.3'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -242,30 +242,10 @@ export const register: Register = on => {
           paddingX={1}
           paddingY={1}
           borderStyle="round"
-          borderColor={isTerminal ? t.main : t.border}
+          // The session this pane is in has a white border, like an active tab.
+          borderColor={row.isSelf ? THEME.strong : isTerminal ? t.main : t.border}
           {...(isTerminal ? {} : { backgroundColor: t.tint })}
         >
-          {/* The session this pane is in: a bar down the card's left edge, like an active tab, a row
-              in from top and bottom to clear the round corners. Laid over the padding: nothing moves. */}
-          {row.isSelf &&
-            (isTerminal ? (
-              <Box key={`self-mark:${row.id}`} position="absolute" left={0} top={1}>
-                <Text color={THEME.strong}>▌</Text>
-              </Box>
-            ) : (
-              // An empty Box with a round border draws as a pill as tall as its top and bottom allow.
-              <Box
-                key={`self-mark:${row.id}`}
-                position="absolute"
-                left={0}
-                top={1}
-                bottom={1}
-                width={0}
-                borderStyle="round"
-                borderColor={THEME.strong}
-                backgroundColor={THEME.strong}
-              />
-            ))}
           <Box flexDirection="row" alignItems="center" gap={1}>
             {/* A fixed column: the state icon, and under it how full the context is,
                 so the context sits in the same place on every card. */}
