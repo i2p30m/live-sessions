@@ -312,6 +312,12 @@ function nest(rows: readonly Row[]): { row: Row; depth: number }[] {
   return out
 }
 
+// A section's rows in a steady order: by title, so a card stays put as its session works.
+export const byTitle = (rows: readonly Row[], lang: Lang = 'en') =>
+  [...rows].sort(
+    (a, b) => a.title.localeCompare(b.title, lang, { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id),
+  )
+
 const byRecency = (rows: readonly Row[]) => [...rows].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
 
 // Context fill as a short bar under the state icon: blue, amber from 75%, red from 90%.

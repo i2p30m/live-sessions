@@ -1,6 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 
 import {
+  byTitle,
   drawSignature,
   hiddenByProject,
   projectPath,
@@ -195,4 +196,14 @@ test('monitors are not background work; a flag marks a session to come back to',
   expect(quiet?.state).toBe('idle')
   const [flagged] = toRows([session('a')], toFacts([['seen:a', NOW], ['flag:a', NOW]]), undefined, NOW)
   expect(flagged?.state).toBe('unread')
+})
+
+test('a section is drawn by title, whatever worked last', async () => {
+  const rows = toRows(
+    [session('x', { title: 'zeta' }), session('y', { title: 'Alfa 10' }), session('z', { title: 'alfa 9' })],
+    emptyFacts(),
+    undefined,
+    NOW,
+  )
+  expect(byTitle(rows).map(row => row.title)).toEqual(['alfa 9', 'Alfa 10', 'zeta'])
 })

@@ -9,6 +9,7 @@ import {
   contextColor,
   GLYPHS,
   ICONS,
+  byTitle,
   drawSignature,
   hiddenByProject,
   isFactKey,
@@ -25,7 +26,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.18.3'
+const VERSION = '0.19.0'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -397,7 +398,8 @@ export const register: Register = on => {
         {groups.map(state => {
           const inGroup = rows.filter(row => row.state === state)
           if (inGroup.length === 0) return null
-          const shown = state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : inGroup
+          // The most recent idle ones are picked; every section is then drawn by title.
+          const shown = byTitle(state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : inGroup, lang)
           return (
             <Box key={`group:${state}`} flexDirection="column" gap={1}>
               <Text size="caption" weight="semibold" color={tone(state).text}>
