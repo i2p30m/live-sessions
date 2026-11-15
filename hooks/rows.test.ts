@@ -2,6 +2,8 @@ import { expect, test } from 'claude-code/testing'
 
 import {
   byTitle,
+  childrenByParent,
+  orchestratorIds,
   drawSignature,
   hiddenByProject,
   projectPath,
@@ -206,4 +208,42 @@ test('a section is drawn by title, whatever worked last', async () => {
     NOW,
   )
   expect(byTitle(rows).map(row => row.title)).toEqual(['alfa 9', 'Alfa 10', 'zeta'])
+})
+
+test('each session knows the sessions it started, the ones that need you first', async () => {
+  const rows = toRows(
+    [
+      session('parent'),
+      session('quiet', { startedBy: 'parent', lastActivityAt: at(0.5) }),
+      session('busy', { startedBy: 'parent', isRunning: true }),
+      session('asking', { startedBy: 'parent' }),
+      // A parent that is not listed (archived, or past the list's limit) links nothing.
+      session('orphan', { startedBy: 'gone' }),
+    ],
+    toFacts([['input:asking', true], ['seen:quiet', NOW]]),
+    undefined,
+    NOW,
+  )
+  const kids = childrenByParent(rows)
+  expect(kids.get('parent')?.map(row => row.id)).toEqual(['asking', 'busy', 'quiet'])
+  expect(kids.has('gone')).toBe(false)
+  // At work below it: orchestrating. Once all it started are idle, it is an ordinary session again.
+  expect([...orchestratorIds(rows, kids)]).toEqual(['parent'])
+  const settled = toRows(
+    [session('parent'), session('quiet', { startedBy: 'parent' })],
+    toFacts([['seen:quiet', NOW]]),
+    undefined,
+    NOW,
+  )
+  expect(orchestratorIds(settled, childrenByParent(settled)).size).toBe(0)
+  expect([1, 3, 13].map(STRINGS.en.started)).toEqual([
+    '1 session started here',
+    '3 sessions started here',
+    '13 sessions started here',
+  ])
+  expect([1, 3, 13].map(STRINGS.pl.started)).toEqual([
+    '1 sesja uruchomiona stąd',
+    '3 sesje uruchomione stąd',
+    '13 sesji uruchomionych stąd',
+  ])
 })

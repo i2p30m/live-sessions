@@ -10,6 +10,8 @@ import {
   GLYPHS,
   ICONS,
   byTitle,
+  childrenByParent,
+  orchestratorIds,
   drawSignature,
   hiddenByProject,
   isFactKey,
@@ -26,7 +28,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.20.0'
+const VERSION = '0.22.0'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -185,6 +187,10 @@ export const register: Register = on => {
     const closedProjects = await read($, closedProjectsAtom)
     const perProject = await read($, perProjectAtom)
     const rows = all.filter(row => !row.isHidden)
+    const byId = new Map(all.map(row => [row.id, row]))
+    const children = childrenByParent(all)
+    // Sessions coordinating others sit at the very top, above every state group.
+    const orchestrators = orchestratorIds(rows, children)
     const stale = staleRows(all, now)
 
     const S = STRINGS[lang]
@@ -232,9 +238,68 @@ export const register: Register = on => {
         <Text color={tone(state).main}>{GLYPHS[state]}</Text>
       )
 
+    // The sessions a session started: a chip with their count and what they are doing,
+    // which unfolds into one line per session.
+    const familyStates: Exclude<RowState, 'idle'>[] = ['input', 'running', 'waiting', 'unread']
+    const drawFamily = (row: Row, kids: readonly Row[]) => {
+      const isOpen = expanded.includes(`family:${row.id}`)
+      return (
+        <Box flexDirection="column" gap={0} paddingLeft={4}>
+          <Box flexDirection="row" flexWrap="wrap" alignItems="center" gap={1}>
+            <Box flexDirection="row" alignItems="center" paddingX={1} {...(isTerminal ? {} : { backgroundColor: THEME.hover })}>
+              <Button key={`family:${row.id}`} plain onPress={() => onToggleFamily($, row.id)}>
+                <Text size="footnote" weight="medium" color={THEME.text}>
+                  {isOpen ? '▾' : '▸'} {S.started(kids.length)}
+                </Text>
+              </Button>
+            </Box>
+            {familyStates.map(state => {
+              const n = kids.filter(kid => kid.state === state).length
+              return n === 0 ? null : (
+                <Text key={`family-count:${row.id}:${state}`} size="footnote" weight="semibold" color={tone(state).text}>
+                  {GLYPHS[state]} {S.pill[state](n)}
+                </Text>
+              )
+            })}
+          </Box>
+          {isOpen &&
+            kids.map(kid => (
+              <Box
+                key={`kid:${row.id}:${kid.id}`}
+                flexDirection="row"
+                alignItems="center"
+                gap={1}
+                paddingLeft={1}
+                hover={{ backgroundColor: THEME.hover }}
+              >
+                <Box flexShrink={0} width={2} justifyContent="center">
+                  <Text color={tone(kid.state).main}>{GLYPHS[kid.state]}</Text>
+                </Box>
+                <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  <Button key={`open-kid:${row.id}:${kid.id}`} plain dimColor={kid.isHidden} onPress={() => onOpen($, kid.id, kid.link)}>
+                    <Text size="footnote" color={THEME.sub} wrap="truncate">
+                      {kid.title}
+                    </Text>
+                  </Button>
+                </Box>
+                <Box flexShrink={0}>
+                  <Text size="footnote" color={THEME.muted}>
+                    {kid.agoShort}
+                  </Text>
+                </Box>
+              </Box>
+            ))}
+        </Box>
+      )
+    }
+
     const drawRow = (row: Row) => {
       const t = tone(row.state)
       const isOpen = expanded.includes(row.id)
+      // A session started by another names it where the project would be (the project too, if theirs differ).
+      const parent = row.parentId && row.parentId !== row.id ? byId.get(row.parentId) : undefined
+      const where = row.isSelf ? S.thisSession : parent && parent.projectPath === row.projectPath ? undefined : row.project
+      const kids = children.get(row.id) ?? []
       return (
         <Box
           key={`row:${row.id}`}
@@ -275,7 +340,7 @@ export const register: Register = on => {
                   matches it there. The terminal draws the label alone, flush. */}
               <Box paddingLeft={isTerminal ? 0 : 'xs'} minWidth={0}>
                 <Text size="footnote" color={THEME.sub} wrap="truncate">
-                  {[row.isSelf ? S.thisSession : row.project, row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
+                  {[where, parent && S.startedBy(parent.title), row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
                 </Text>
               </Box>
             </Box>
@@ -284,6 +349,7 @@ export const register: Register = on => {
               {!row.isSelf && iconButton(`hide:${row.id}`, '↓', () => onHide($, [row.id]))}
             </Box>
           </Box>
+          {kids.length > 0 && drawFamily(row, kids)}
           {row.tasks.length > 0 && (
             <Box flexDirection="column" gap={0} paddingLeft={4}>
               <Box flexDirection="row">
@@ -395,8 +461,17 @@ export const register: Register = on => {
           )}
         </Box>
 
+        {orchestrators.size > 0 && (
+          <Box key="group:orchestrating" flexDirection="column" gap={1}>
+            <Text size="caption" weight="semibold" color={THEME.strong}>
+              {S.orchestrating.toLocaleUpperCase(lang)}
+            </Text>
+            {byTitle(rows.filter(row => orchestrators.has(row.id)), lang).map(drawRow)}
+          </Box>
+        )}
+
         {groups.map(state => {
-          const inGroup = rows.filter(row => row.state === state)
+          const inGroup = rows.filter(row => row.state === state && !orchestrators.has(row.id))
           if (inGroup.length === 0) return null
           // OTHER keeps its most recent first; the live groups are drawn by title, so their cards stay put.
           const shown = state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : byTitle(inGroup, lang)
@@ -685,6 +760,12 @@ async function onUnhide($: EngineInterface, id: string) {
 async function onToggleTasks($: EngineInterface, id: string) {
   await update($, expandedAtom, ids => (ids.includes(id) ? ids.filter(one => one !== id) : [...ids, id]))
   await grabFocus($, `tasks:${id}`)
+}
+
+async function onToggleFamily($: EngineInterface, id: string) {
+  const key = `family:${id}`
+  await update($, expandedAtom, ids => (ids.includes(key) ? ids.filter(one => one !== key) : [...ids, key]))
+  await grabFocus($, key)
 }
 
 // The app's tasks pane belongs to its session and only that session can show it: our own is

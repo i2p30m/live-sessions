@@ -6,6 +6,7 @@ A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside th
 - **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents; monitors are left out, as in the app). Click a task to open its session with the app's Background tasks pane showing.
 - **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked). Click the circle of any other session to flag it to come back to: it joins this group until you open it or press ✓.
 - Within each of these groups sessions are listed by title, so a card stays put while its session works; **Other** (idle sessions) lists the most recent first. The session the pane is in has a white border.
+- **Orchestrating**: a session whose started sessions (`start_session`) are still at it (anything but idle) leads the pane in a section of its own, whatever its own state. Its card shows how many it started and what they are doing (`13 sessions started here · ≡ 5 working`); ▸ unfolds the list, and a title opens that session. Each started session keeps its own card in its state group, naming the session that started it (`↳ orchestr`).
 - **Context** on each live session: a short bar and a percentage under its state icon, always in the same spot, showing how full its context window is (blue, amber from 75%, red from 90%).
 - **Projects**: the other sessions grouped by project, the project you worked in most recently first, with side sessions nested under the session that started them. Pick how many sessions each project shows at the top of the pane. The ⊕ in the PROJECTS header lists the sessions shown above in their projects too (⊖ hides them again); hover it to see which it does.
 
@@ -14,6 +15,8 @@ Click a title to open that session. **+** next to a project opens a new, empty s
 The pane opens when a session starts, or with your first message if the app did not show it then; `/live-sessions` (or `/sesje`) opens it again after you close it.
 
 The pane's settings are shared by every session: the width you drag it to, the projects you fold and the number of sessions per project. The app itself decides which side the pane docks on and whether it pops out; the mod cannot set those.
+
+Cloud sessions are left out: the app lists only the sessions on this computer to a mod, and a cloud session runs elsewhere, without the plugins installed here, so it does not get the pane either.
 
 ## Language
 

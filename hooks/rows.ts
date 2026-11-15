@@ -321,6 +321,32 @@ export const byTitle = (rows: readonly Row[], lang: Lang = 'en') =>
     (a, b) => a.title.localeCompare(b.title, lang, { sensitivity: 'base', numeric: true }) || a.id.localeCompare(b.id),
   )
 
+// The sessions each session started (`startedBy`), in the pane's own order: the ones that need
+// you first, then working, waiting, to check, idle; most recent first within each.
+export function childrenByParent(rows: readonly Row[]): Map<string, Row[]> {
+  const ids = new Set(rows.map(row => row.id))
+  const out = new Map<string, Row[]>()
+  for (const row of rows) {
+    if (!row.parentId || row.parentId === row.id || !ids.has(row.parentId)) continue
+    out.set(row.parentId, [...(out.get(row.parentId) ?? []), row])
+  }
+  for (const [id, kids] of out) {
+    out.set(id, [...kids].sort((a, b) => RANK[a.state] - RANK[b.state] || b.lastActivityAt - a.lastActivityAt))
+  }
+
+  return out
+}
+
+// Sessions with started sessions still at it (any of them not idle): they get a section of their
+// own at the top, whatever their own state. A session hidden by hand stays hidden.
+export function orchestratorIds(rows: readonly Row[], children: ReadonlyMap<string, readonly Row[]>): Set<string> {
+  return new Set(
+    rows
+      .filter(row => !row.isHidden && (children.get(row.id) ?? []).some(kid => kid.state !== 'idle'))
+      .map(row => row.id),
+  )
+}
+
 const byRecency = (rows: readonly Row[]) => [...rows].sort((a, b) => b.lastActivityAt - a.lastActivityAt)
 
 // Context fill as a short bar under the state icon: blue, amber from 75%, red from 90%.

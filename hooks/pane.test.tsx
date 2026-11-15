@@ -21,6 +21,8 @@ const SESSIONS = [
   { sessionId: 'local_run', title: 'Buduje', cwd: '/code/app', isRunning: true, lastActivityAt: at(0), link: 'claude://x/run' },
   { sessionId: 'local_new', title: 'Skończyła', cwd: '/code/app', isRunning: false, lastActivityAt: at(0.5), link: 'claude://x/new' },
   { sessionId: 'local_old', title: 'Stara', cwd: '/code/old', isRunning: false, lastActivityAt: at(9), link: 'claude://x/old' },
+  // Started by this session, as `start_session` links them.
+  { sessionId: 'local_kid', title: 'Dziecko', cwd: '/code/me/.claude/worktrees/kid', isRunning: true, lastActivityAt: at(0), link: 'claude://x/kid', name: 'kid', startedBy: 'local_me' },
 ]
 const SELF = { sessionId: 'local_me', title: 'Ta', cwd: '/code/me', isRunning: true, lastActivityAt: at(0) }
 
@@ -65,7 +67,7 @@ test('the pane shows states; hiding only hides', async ($, on) => {
 
   for (const surface of ['desktop', 'terminal'] as const) {
     const ui = await $.ui.mount({ ...PANE, surface })
-    expect((await ui.find({ type: 'Text', text: /working$/ }))?.text).toBe('2 working')
+    expect((await ui.find({ type: 'Text', text: /working$/ }))?.text).toBe('3 working')
     expect(await ui.find({ type: 'Text', text: /^WORKING$/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /^DONE, NOT CHECKED$/ })).toBeDefined()
     expect(await ui.find({ key: 'seen:local_me' })).toBeUndefined()
@@ -88,6 +90,17 @@ test('the pane shows states; hiding only hides', async ($, on) => {
   // Only the session the pane is in has a white border.
   expect((await ui.find({ key: 'row:local_me' }))?.props.borderColor).toBe('#ffffff')
   expect((await ui.find({ key: 'row:local_run' }))?.props.borderColor).not.toBe('#ffffff')
+  // A started session names the one that started it; that one counts and lists what it started.
+  expect(await ui.find({ type: 'Text', text: '↳ Ta · worktree · just now' })).toBeDefined()
+  expect((await ui.find({ key: 'family:local_me' }))?.text).toBe('▸ 1 session started here')
+  expect(await ui.find({ type: 'Text', text: '≡ 1 working' })).toBeDefined()
+  expect(await ui.find({ key: 'open-kid:local_me:local_kid' })).toBeUndefined()
+  // With a started session at work, this one leads the pane in a section of its own.
+  const headers = (await ui.findAll({ type: 'Text', text: /^[A-Z ,]+$/ })).map(text => text.text)
+  expect(headers[0]).toBe('ORCHESTRATING')
+  await ui.press({ key: 'family:local_me' })
+  await ui.press({ key: 'open-kid:local_me:local_kid' })
+  expect(runs).toContain('open claude://x/kid')
   // The circle of an idle session flags it to come back to.
   await ui.press({ key: 'flag:local_old' })
   expect(writes.some(write => write.startsWith('set flag:local_old='))).toBe(true)
@@ -208,7 +221,7 @@ test('with Claude Code set to Polish the pane speaks Polish', async ($, on) => {
 
   await $.session.start({ cwd: '/', surface: 'desktop', isInteractive: true })
   const ui = await $.ui.mount({ ...PANE, surface: 'desktop' })
-  expect((await ui.find({ type: 'Text', text: /pracuje$/ }))?.text).toBe('2 pracuje')
+  expect((await ui.find({ type: 'Text', text: /pracuje$/ }))?.text).toBe('3 pracuje')
   expect(await ui.find({ type: 'Text', text: /^SKOŃCZONE, DO SPRAWDZENIA$/ })).toBeDefined()
   await ui.unmount()
 })

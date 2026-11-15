@@ -15,6 +15,7 @@ export type Strings = {
   commandDescription: string
   commandOpened: string
   state: Record<RowState, string>
+  orchestrating: string
   pill: Record<Exclude<RowState, 'idle'>, (n: number) => string>
   nothingWaiting: string
   perProject: string
@@ -31,6 +32,8 @@ export type Strings = {
   justNow: string
   ago: (amount: number, unit: 'min' | 'h' | 'd') => string
   tasks: (n: number) => string
+  startedBy: (title: string) => string
+  started: (n: number) => string
   untitled: string
   noDescription: string
   noProject: string
@@ -51,6 +54,7 @@ export const STRINGS: Record<Lang, Strings> = {
       unread: 'Done, not checked',
       idle: 'Other',
     },
+    orchestrating: 'Orchestrating',
     pill: {
       input: n => `${n} waiting`,
       running: n => `${n} working`,
@@ -72,6 +76,8 @@ export const STRINGS: Record<Lang, Strings> = {
     justNow: 'just now',
     ago: (amount, unit) => `${amount} ${unit} ago`,
     tasks: n => `${n} background ${n === 1 ? 'task' : 'tasks'}`,
+    startedBy: title => `↳ ${title}`,
+    started: n => `${n} ${n === 1 ? 'session' : 'sessions'} started here`,
     untitled: 'Untitled',
     noDescription: 'no description',
     noProject: 'no project',
@@ -90,6 +96,7 @@ export const STRINGS: Record<Lang, Strings> = {
       unread: 'Skończone, do sprawdzenia',
       idle: 'Pozostałe',
     },
+    orchestrating: 'Koordynuje',
     pill: {
       input: n => `${n} czeka`,
       running: n => `${n} pracuje`,
@@ -111,6 +118,8 @@ export const STRINGS: Record<Lang, Strings> = {
     justNow: 'przed chwilą',
     ago: (amount, unit) => `${amount} ${unit} temu`,
     tasks: n => `${n} ${plural(n, 'zadanie', 'zadania', 'zadań')} w tle`,
+    startedBy: title => `↳ ${title}`,
+    started: n => `${n} ${plural(n, 'sesja uruchomiona', 'sesje uruchomione', 'sesji uruchomionych')} stąd`,
     untitled: 'Bez tytułu',
     noDescription: 'bez opisu',
     noProject: 'bez projektu',

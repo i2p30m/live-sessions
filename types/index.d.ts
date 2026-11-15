@@ -38,7 +38,7 @@ declare module 'claude-code' {
     'live-sessions': {
       rows: Row[]
       error: string | null
-      // Rows whose background tasks are unfolded.
+      // Rows whose background tasks are unfolded (`<id>`) and whose started sessions are (`family:<id>`).
       expandedIds: string[]
       // Project groups at the bottom that are folded (all start unfolded).
       closedProjects: string[]
