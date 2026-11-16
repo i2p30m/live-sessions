@@ -75,6 +75,7 @@ let lastError: string | null = null
 let lastSeenWrite = 0
 let lastViewedWrite = 0
 let lastContextPercent: number | undefined
+let lastModel: string | undefined
 let isAwaitingPermission = false
 // Set when the person closes the pane; /sesje clears it.
 let isClosedByPerson = false
@@ -340,7 +341,7 @@ export const register: Register = on => {
                   matches it there. The terminal draws the label alone, flush. */}
               <Box paddingLeft={isTerminal ? 0 : 'xs'} minWidth={0}>
                 <Text size="footnote" color={THEME.sub} wrap="truncate">
-                  {[where, parent && S.startedBy(parent.title), row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
+                  {[row.model, where, parent && S.startedBy(parent.title), row.isWorktree && S.worktree, row.ago].filter(Boolean).join(' · ')}
                 </Text>
               </Box>
             </Box>
@@ -577,7 +578,11 @@ async function tick($: EngineInterface) {
   isPolling = true
   try {
     // The context figure is a nicety: never let it stop a refresh.
-    await Promise.all([markSelfOnScreen($), reportContext($).catch(() => undefined)])
+    await Promise.all([
+      markSelfOnScreen($),
+      reportContext($).catch(() => undefined),
+      reportModel($).catch(() => undefined),
+    ])
     const panes = await $.ui.panes()
     if (panes.some(pane => pane.id === PANE && pane.isPlaced)) await poll($)
     await flushDebug($)
@@ -619,6 +624,16 @@ async function poll($: EngineInterface) {
   lastSig = sig
   await update($, rowsAtom, () => rows)
   trace(`redraw ${rows.length}`)
+}
+
+// Every session reports the model it runs (it can change mid-session); the pane draws everyone's.
+async function reportModel($: EngineInterface) {
+  const id = await ensureSelf($)
+  if (!id) return
+  const model = parseSession(await callText($, 'get_session', { session_id: 'self' }))?.model
+  if (!model || model === lastModel) return
+  lastModel = model
+  await $.store.set(`model:${id}`, model)
 }
 
 // While this session is on screen, everything up to now counts as seen.

@@ -17,6 +17,8 @@ export type Session = {
   worktree?: unknown
   worktreePath?: string
   startedBy?: string
+  // Only `get_session` reports it; the pane reads it from the store (`model:<id>`) instead.
+  model?: string
 }
 
 // What the shared store says about each session, read once per poll.
@@ -33,11 +35,41 @@ export type Facts = {
   hidden: Record<string, number>
   bg: Record<string, BgTask[]>
   input: Record<string, boolean>
+  // The model id each session last reported (`claude-sonnet-5-5`).
+  model: Record<string, string>
 }
 
-export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx', 'flag', 'done'] as const
+export const FACT_PREFIXES = ['seen', 'viewed', 'hidden', 'bg', 'input', 'ctx', 'flag', 'done', 'model'] as const
 
-export const emptyFacts = (): Facts => ({ seen: {}, viewed: {}, hidden: {}, bg: {}, input: {}, ctx: {}, flag: {}, done: {} })
+export const emptyFacts = (): Facts => ({
+  seen: {},
+  viewed: {},
+  hidden: {},
+  bg: {},
+  input: {},
+  ctx: {},
+  flag: {},
+  done: {},
+  model: {},
+})
+
+// A model id as a short name: `claude-sonnet-5-5` -> `Sonnet 5.5`, `claude-opus-4-1-20250805` -> `Opus 4.1`,
+// `claude-3-5-haiku-20241022` -> `Haiku 3.5`. A `[1m]` suffix is kept as ` 1M`. Anything unknown is shown as is.
+export function modelLabel(id: string): string {
+  const raw = id.trim()
+  const big = /\[1m\]$/i.test(raw) ? ' 1M' : ''
+  const name = raw.replace(/\[.*\]$/, '').toLowerCase()
+  const cap = (word: string) => word.charAt(0).toUpperCase() + word.slice(1)
+  const version = (major: string, minor: string | undefined) =>
+    minor && minor.length <= 2 ? `${major}.${minor}` : major
+  const modern = /^claude-(opus|sonnet|haiku|fable)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(name)
+  if (modern) return `${cap(modern[1]!)} ${version(modern[2]!, modern[3])}${big}`
+  const legacy = /^claude-(\d+)(?:-(\d))?-(opus|sonnet|haiku)(?:-\d{8})?$/.exec(name)
+  if (legacy) return `${cap(legacy[3]!)} ${version(legacy[1]!, legacy[2])}${big}`
+  if (/^(opus|sonnet|haiku|fable)$/.test(name)) return `${cap(name)}${big}`
+
+  return raw.replace(/^claude-/i, '')
+}
 
 const RANK: Record<RowState, number> = { input: 0, running: 1, waiting: 2, unread: 3, idle: 4 }
 
@@ -88,6 +120,8 @@ export function toFacts(entries: ReadonlyArray<readonly [string, unknown]>, lang
       if (value === true) facts.input[id] = true
     } else if (fact === 'bg') {
       facts.bg[id] = toTasks(value, lang)
+    } else if (fact === 'model') {
+      if (typeof value === 'string' && value !== '') facts.model[id] = value
     } else if ((FACT_PREFIXES as readonly string[]).includes(fact) && typeof value === 'number') {
       facts[fact as 'seen' | 'viewed' | 'hidden' | 'ctx' | 'flag' | 'done'][id] = value
     }
@@ -184,6 +218,7 @@ export function toRows(
       lastActivityAt,
       lastViewedAt: facts.viewed[id] ?? 0,
       ...(facts.ctx[id] !== undefined ? { contextPercent: facts.ctx[id] } : {}),
+      ...(facts.model[id] || session.model ? { model: modelLabel((facts.model[id] || session.model) as string) } : {}),
     })
   }
 

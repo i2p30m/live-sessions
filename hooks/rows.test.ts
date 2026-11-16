@@ -15,6 +15,7 @@ import {
   staleRows,
   toFacts,
   toRows,
+  modelLabel,
 } from './rows'
 import { STRINGS, agoLabel, langOf } from './i18n'
 
@@ -246,4 +247,22 @@ test('each session knows the sessions it started, the ones that need you first',
     '3 sesje uruchomione stąd',
     '13 sesji uruchomionych stąd',
   ])
+})
+
+test('modelLabel shortens model ids', () => {
+  expect(modelLabel('claude-sonnet-5-5')).toBe('Sonnet 5.5')
+  expect(modelLabel('claude-opus-4-1-20250805')).toBe('Opus 4.1')
+  expect(modelLabel('claude-3-5-haiku-20241022')).toBe('Haiku 3.5')
+  expect(modelLabel('claude-fable-5-2')).toBe('Fable 5.2')
+  expect(modelLabel('claude-opus-4-7[1m]')).toBe('Opus 4.7 1M')
+  expect(modelLabel('sonnet')).toBe('Sonnet')
+  expect(modelLabel('gpt-x')).toBe('gpt-x')
+})
+
+test('a reported model reaches the row, and the store wins over get_session', () => {
+  const session = { sessionId: 'a', title: 't', cwd: '/p', isRunning: true, lastActivityAt: new Date(0).toISOString() }
+  const facts = toFacts([['model:a', 'claude-opus-5-5']])
+  expect(toRows([session], facts, undefined, 0)[0]?.model).toBe('Opus 5.5')
+  expect(toRows([session], emptyFacts(), undefined, 0)[0]?.model).toBeUndefined()
+  expect(toRows([{ ...session, model: 'claude-sonnet-5-5' }], emptyFacts(), 'a', 0)[0]?.model).toBe('Sonnet 5.5')
 })

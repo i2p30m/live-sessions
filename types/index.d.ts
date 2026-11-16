@@ -31,6 +31,8 @@ export type Row = {
   lastViewedAt: number
   // Context window fill in percent, when the session has reported it.
   contextPercent?: number
+  // The model working on the session, as a short name (`Sonnet 5.5`), when it has reported one.
+  model?: string
 }
 
 declare module 'claude-code' {
