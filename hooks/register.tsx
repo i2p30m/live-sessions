@@ -28,7 +28,7 @@ import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.22.0'
+const VERSION = '0.23.0'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -476,11 +476,26 @@ export const register: Register = on => {
           if (inGroup.length === 0) return null
           // OTHER keeps its most recent first; the live groups are drawn by title, so their cards stay put.
           const shown = state === 'idle' ? inGroup.slice(0, IDLE_SHOWN) : byTitle(inGroup, lang)
+          // DONE and OTHER can pile up: one press moves the whole group into its projects, as ↓ on each card.
+          const movable = state === 'unread' || state === 'idle' ? inGroup.filter(row => !row.isSelf) : []
           return (
             <Box key={`group:${state}`} flexDirection="column" gap={1}>
-              <Text size="caption" weight="semibold" color={tone(state).text}>
-                {S.state[state].toLocaleUpperCase(lang)}
-              </Text>
+              <Box flexDirection="row" alignItems="center" justifyContent="space-between" gap={1}>
+                <Box flexGrow={1} flexShrink={1} minWidth={0}>
+                  <Text size="caption" weight="semibold" color={tone(state).text}>
+                    {S.state[state].toLocaleUpperCase(lang)}
+                  </Text>
+                </Box>
+                {movable.length > 1 && (
+                  <Box key={`hide-group-wrap:${state}`} flexShrink={0} paddingX={1} hover={{ backgroundColor: THEME.hover }}>
+                    <Button key={`hide-group:${state}`} plain onPress={() => onHide($, movable.map(row => row.id))}>
+                      <Text size="footnote" weight="semibold" color={THEME.muted} hover={{ color: THEME.strong }}>
+                        {S.hideAll(movable.length)}
+                      </Text>
+                    </Button>
+                  </Box>
+                )}
+              </Box>
               {shown.map(drawRow)}
             </Box>
           )

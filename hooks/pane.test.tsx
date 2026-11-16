@@ -73,6 +73,8 @@ test('the pane shows states; hiding only hides', async ($, on) => {
     expect(await ui.find({ key: 'seen:local_me' })).toBeUndefined()
     expect(await ui.find({ key: 'hide:local_me' })).toBeUndefined()
     expect(await ui.find({ key: 'cleanup' })).toBeDefined()
+    // The DONE group is too small here for a group button (it needs two others).
+    expect(await ui.find({ key: 'hide-group:running' })).toBeUndefined()
     await ui.unmount()
   }
 

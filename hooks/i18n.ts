@@ -21,6 +21,7 @@ export type Strings = {
   perProject: string
   all: string
   cleanup: (hours: number, n: number) => string
+  hideAll: (n: number) => string
   projects: string
   showActive: string
   hideActive: string
@@ -65,6 +66,7 @@ export const STRINGS: Record<Lang, Strings> = {
     perProject: 'Sessions per project',
     all: 'All',
     cleanup: (hours, n) => `↓ Move idle > ${hours} h to projects (${n})`,
+    hideAll: n => `↓ All (${n})`,
     projects: 'PROJECTS',
     showActive: 'Show active sessions here too',
     hideActive: 'Hide active sessions here',
@@ -107,6 +109,7 @@ export const STRINGS: Record<Lang, Strings> = {
     perProject: 'Sesji na projekt',
     all: 'Wszystkie',
     cleanup: (hours, n) => `↓ Przenieś nieaktywne > ${hours} h do projektów (${n})`,
+    hideAll: n => `↓ Wszystkie (${n})`,
     projects: 'PROJEKTY',
     showActive: 'Pokaż tu też aktywne sesje',
     hideActive: 'Ukryj tu aktywne sesje',
