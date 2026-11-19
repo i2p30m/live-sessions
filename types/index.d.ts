@@ -6,6 +6,10 @@ export type BgTask = {
   type: string
   status: string
   label: string
+  // When it started (ms): the launch when seen, else the first stop that listed it.
+  startedAt?: number
+  // How long it has run, as `<1m` / `6m` / `1h 04m`; filled per poll for drawing.
+  elapsed?: string
 }
 
 export type Row = {

@@ -22,13 +22,14 @@ import {
   toFacts,
   toRows,
   toTasks,
+  withStarts,
 } from './rows'
 import { STRINGS, langOf } from './i18n'
 import type { Lang } from './i18n'
 
 const PANE = 'live-sessions'
 // Keep equal to .claude-plugin/plugin.json: the footer shows which code the pane really runs.
-const VERSION = '0.23.0'
+const VERSION = '0.24.0'
 const SERVER = 'ccd_session_mgmt'
 const POLL_MS = 4000
 const SEEN_WRITE_MS = 15_000
@@ -141,6 +142,7 @@ export const register: Register = on => {
       isAwaitingPermission = false
       await setInput($, false)
     }
+    void noteLaunch($, result)
     if (tool === 'mcp__ccd_turn__wrap_up' && (e as unknown as { blocked?: unknown }).blocked === true) {
       await setInput($, true)
     }
@@ -372,13 +374,20 @@ export const register: Register = on => {
                         {task.type === 'subagent' ? 'agent' : task.type}
                       </Text>
                     </Box>
-                    <Box flexShrink={1} minWidth={0} hover={{ backgroundColor: THEME.hover }}>
+                    <Box flexGrow={1} flexShrink={1} minWidth={0} hover={{ backgroundColor: THEME.hover }}>
                       <Button key={`open-task:${row.id}:${task.id}`} plain onPress={() => onOpenTask($, row)}>
                         <Text size="footnote" color={THEME.sub} wrap="truncate">
                           {task.label}
                         </Text>
                       </Button>
                     </Box>
+                    {task.elapsed && (
+                      <Box flexShrink={0}>
+                        <Text size="footnote" color={THEME.muted}>
+                          {task.elapsed}
+                        </Text>
+                      </Box>
+                    )}
                   </Box>
                 ))}
             </Box>
@@ -710,10 +719,40 @@ async function setInput($: EngineInterface, value: boolean) {
   else await $.store.delete(`input:${id}`)
 }
 
+// The stop lists background work with no start time, so the start is kept here: when the call
+// that launched it answered (`launch:<id>`, by task id), else the first stop that listed it.
 async function saveTasks($: EngineInterface, tasks: unknown) {
   const id = await ensureSelf($)
-  if (id) await $.store.set(`bg:${id}`, toTasks(tasks ?? [], lang))
+  if (!id) return
+  const [before, launches] = await Promise.all([$.store.get(`bg:${id}`), $.store.get(`launch:${id}`)])
+  const launched = isRecord(launches) ? (launches as Record<string, number>) : {}
+  const next = withStarts(toTasks(tasks ?? [], lang), toTasks(before, lang), launched, await $.clock.now())
+  await $.store.set(`bg:${id}`, next)
+  // Launches of finished work are dropped; ones not listed yet stay for the next stop.
+  const listed = new Set(next.map(task => task.id))
+  const kept = Object.fromEntries(Object.entries(launched).filter(([task]) => !listed.has(task)).slice(-20))
+  if (Object.keys(kept).length > 0) await $.store.set(`launch:${id}`, kept)
+  else await $.store.delete(`launch:${id}`)
 }
+
+// A background Agent (`agentId`, `async_launched`) or Bash (`backgroundTaskId`) has just started.
+async function noteLaunch($: EngineInterface, answer: unknown) {
+  const result = isRecord(answer) ? answer.result : undefined
+  if (!isRecord(result)) return
+  const task =
+    typeof result.backgroundTaskId === 'string'
+      ? result.backgroundTaskId
+      : result.status === 'async_launched' && typeof result.agentId === 'string'
+        ? result.agentId
+        : undefined
+  const id = task && (await ensureSelf($))
+  if (!task || !id) return
+  const launches = await $.store.get(`launch:${id}`)
+  await $.store.set(`launch:${id}`, { ...(isRecord(launches) ? launches : {}), [task]: await $.clock.now() })
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 async function markDone($: EngineInterface) {
   const id = await ensureSelf($)

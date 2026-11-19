@@ -145,8 +145,29 @@ export function toTasks(value: unknown, lang: Lang = 'en'): BgTask[] {
         type: typeof one.type === 'string' ? one.type : '?',
         status: typeof one.status === 'string' ? one.status : '',
         label: (text ?? STRINGS[lang].noDescription).replace(/\s+/g, ' ').slice(0, 160),
+        ...(typeof one.startedAt === 'number' ? { startedAt: one.startedAt } : {}),
       }
     })
+}
+
+// Each task keeps the start it had (from its launch, or an earlier stop); a new one starts now.
+export function withStarts(
+  tasks: readonly BgTask[],
+  before: readonly BgTask[],
+  launches: Readonly<Record<string, number>>,
+  now: number,
+): BgTask[] {
+  const old = new Map(before.map(task => [task.id, task.startedAt]))
+  return tasks.map(task => ({ ...task, startedAt: launches[task.id] ?? old.get(task.id) ?? task.startedAt ?? now }))
+}
+
+// Run time like the app's task list: `<1m`, `6m`, `1h 04m`.
+// Minutes only past the first: the label then changes once a minute, not every poll.
+export function elapsedLabel(ms: number): string {
+  const minutes = Math.floor(Math.max(0, ms) / 60000)
+  if (minutes < 1) return '<1m'
+  if (minutes < 60) return `${minutes}m`
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`
 }
 
 export function isFactKey(key: string): boolean {
@@ -212,7 +233,9 @@ export function toRows(
       isSelf,
       isWorktree: isWorktree(session),
       isHidden,
-      tasks: facts.bg[id] ?? [],
+      tasks: (facts.bg[id] ?? []).map(task =>
+        task.startedAt === undefined ? task : { ...task, elapsed: elapsedLabel(now - task.startedAt) },
+      ),
       ago: agoLabel(now - lastActivityAt, lang),
       agoShort: agoLabel(now - lastActivityAt, lang, true),
       lastActivityAt,

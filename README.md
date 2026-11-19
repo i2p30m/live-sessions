@@ -3,7 +3,7 @@
 A mod for Claude Code (the Code tab of the Claude desktop app): a pane beside the conversation that lists all your sessions and makes their state obvious at a glance.
 
 - **Needs you**: the session asked a question, wants a plan approved, or is waiting for a tool permission.
-- **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents; monitors are left out, as in the app). Click a task to open its session with the app's Background tasks pane showing.
+- **Working** and **Waiting on background work**, with an expandable list of the background tasks (shells, subagents; monitors are left out, as in the app), each with how long it has been running (`6m`, `1h 04m`). Click a task to open its session with the app's Background tasks pane showing.
 - **Done, not checked**: the session finished and you have not opened it since (✓ marks it as checked). Click the circle of any other session to flag it to come back to: it joins this group until you open it or press ✓.
 - Within each of these groups sessions are listed by title, so a card stays put while its session works; **Other** (idle sessions) lists the most recent first. The session the pane is in has a white border.
 - **Orchestrating**: a session whose started sessions (`start_session`) are still at it (anything but idle) leads the pane in a section of its own, whatever its own state. Its card shows how many it started and what they are doing (`13 sessions started here · ≡ 5 working`); ▸ unfolds the list, and a title opens that session. Each started session keeps its own card in its state group, naming the session that started it (`↳ orchestr`).

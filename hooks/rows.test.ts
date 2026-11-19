@@ -16,6 +16,8 @@ import {
   toFacts,
   toRows,
   modelLabel,
+  withStarts,
+  elapsedLabel,
 } from './rows'
 import { STRINGS, agoLabel, langOf } from './i18n'
 
@@ -265,4 +267,21 @@ test('a reported model reaches the row, and the store wins over get_session', ()
   expect(toRows([session], facts, undefined, 0)[0]?.model).toBe('Opus 5.5')
   expect(toRows([session], emptyFacts(), undefined, 0)[0]?.model).toBeUndefined()
   expect(toRows([{ ...session, model: 'claude-sonnet-5-5' }], emptyFacts(), 'a', 0)[0]?.model).toBe('Sonnet 5.5')
+})
+
+test('background tasks keep their start and show how long they have run', async () => {
+  const listed = toTasks([
+    { id: 'old', type: 'subagent', status: 'running', description: 'g-48 land' },
+    { id: 'launched', type: 'shell', status: 'running', description: 'probe' },
+    { id: 'new', type: 'shell', status: 'running', description: 'tail' },
+  ])
+  const before = [{ id: 'old', type: 'subagent', status: 'running', label: 'g-48 land', startedAt: NOW - 63 * 60_000 }]
+  const started = withStarts(listed, before, { launched: NOW - 5 * 60_000 }, NOW)
+  expect(started.map(task => task.startedAt)).toEqual([NOW - 63 * 60_000, NOW - 5 * 60_000, NOW])
+  // The start survives the store's round trip.
+  expect(toTasks(started)[0]?.startedAt).toBe(NOW - 63 * 60_000)
+
+  const [row] = toRows([session('a')], toFacts([['bg:a', started]]), undefined, NOW)
+  expect(row?.tasks.map(task => task.elapsed)).toEqual(['1h 03m', '5m', '<1m'])
+  expect([0, 59_000, 6 * 60_000, 86 * 60_000].map(elapsedLabel)).toEqual(['<1m', '<1m', '6m', '1h 26m'])
 })
